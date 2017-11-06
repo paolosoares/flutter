@@ -16,18 +16,21 @@ void main() {
     // so if our widget is 100 pixels tall, it should fit exactly 6 times.
 
     Widget builder() {
-      return new FlipWidget(
-        left: new ListView.builder(
-          itemBuilder: (BuildContext context, int index) {
-            callbackTracker.add(index);
-            return new Container(
-              key: new ValueKey<int>(index),
-              height: 100.0,
-              child: new Text("$index"),
-            );
-          },
+      return new Directionality(
+        textDirection: TextDirection.ltr,
+        child: new FlipWidget(
+          left: new ListView.builder(
+            itemBuilder: (BuildContext context, int index) {
+              callbackTracker.add(index);
+              return new Container(
+                key: new ValueKey<int>(index),
+                height: 100.0,
+                child: new Text('$index'),
+              );
+            },
+          ),
+          right: const Text('Not Today'),
         ),
-        right: const Text('Not Today'),
       );
     }
 
@@ -63,17 +66,20 @@ void main() {
         key: new ValueKey<int>(index),
         width: 500.0, // this should be ignored
         height: 200.0,
-        child: new Text('$index'),
+        child: new Text('$index', textDirection: TextDirection.ltr),
       );
     };
 
     Widget builder() {
-      return new FlipWidget(
-        left: new ListView.builder(
-          controller: new ScrollController(initialScrollOffset: 300.0),
-          itemBuilder: itemBuilder,
+      return new Directionality(
+        textDirection: TextDirection.ltr,
+        child: new FlipWidget(
+          left: new ListView.builder(
+            controller: new ScrollController(initialScrollOffset: 300.0),
+            itemBuilder: itemBuilder,
+          ),
+          right: const Text('Not Today'),
         ),
-        right: const Text('Not Today'),
       );
     }
 
@@ -112,18 +118,21 @@ void main() {
         key: new ValueKey<int>(index),
         height: 500.0, // this should be ignored
         width: 200.0,
-        child: new Text('$index'),
+        child: new Text('$index', textDirection: TextDirection.ltr),
       );
     };
 
     Widget builder() {
-      return new FlipWidget(
-        left: new ListView.builder(
-          scrollDirection: Axis.horizontal,
-          controller: new ScrollController(initialScrollOffset: 300.0),
-          itemBuilder: itemBuilder,
+      return new Directionality(
+        textDirection: TextDirection.ltr,
+        child: new FlipWidget(
+          left: new ListView.builder(
+            scrollDirection: Axis.horizontal,
+            controller: new ScrollController(initialScrollOffset: 300.0),
+            itemBuilder: itemBuilder,
+          ),
+          right: const Text('Not Today'),
         ),
-        right: const Text('Not Today'),
       );
     }
 
@@ -160,7 +169,7 @@ void main() {
         key: new ValueKey<int>(index),
         width: 500.0, // this should be ignored
         height: 220.0,
-        child: new Text('$index')
+        child: new Text('$index', textDirection: TextDirection.ltr)
       );
     };
 
@@ -170,8 +179,11 @@ void main() {
     }
 
     Widget builder() {
-      return new ListView.builder(
-        itemBuilder: itemBuilder,
+      return new Directionality(
+        textDirection: TextDirection.ltr,
+        child: new ListView.builder(
+          itemBuilder: itemBuilder,
+        ),
       );
     }
 
@@ -202,7 +214,7 @@ void main() {
         width: 500.0, // this should be ignored
         height: 220.0,
         color: Theme.of(context).primaryColor,
-        child: new Text('$index'),
+        child: new Text('$index', textDirection: TextDirection.ltr),
       );
     };
 
@@ -211,12 +223,15 @@ void main() {
     );
 
     await tester.pumpWidget(
-      new StatefulBuilder(
-        builder: (BuildContext context, StateSetter setter) {
-          setState = setter;
-          return new Theme(data: themeData, child: viewport);
-        }
-      )
+      new Directionality(
+        textDirection: TextDirection.ltr,
+        child: new StatefulBuilder(
+          builder: (BuildContext context, StateSetter setter) {
+            setState = setter;
+            return new Theme(data: themeData, child: viewport);
+          },
+        ),
+      ),
     );
 
     DecoratedBox widget = tester.firstWidget(find.byType(DecoratedBox));
@@ -241,14 +256,17 @@ void main() {
         width: 500.0, // this should be ignored
         height: 220.0,
         color: Colors.green[500],
-        child: new Text('$index'),
+        child: new Text('$index', textDirection: TextDirection.ltr),
       );
     };
 
     await tester.pumpWidget(
-      new ListView.builder(
-        padding: const EdgeInsets.fromLTRB(7.0, 3.0, 5.0, 11.0),
-        itemBuilder: itemBuilder,
+      new Directionality(
+        textDirection: TextDirection.ltr,
+        child: new ListView.builder(
+          padding: const EdgeInsets.fromLTRB(7.0, 3.0, 5.0, 11.0),
+          itemBuilder: itemBuilder,
+        ),
       ),
     );
 
@@ -259,14 +277,19 @@ void main() {
   });
 
   testWidgets('ListView underflow extents', (WidgetTester tester) async {
-    await tester.pumpWidget(new ListView(
-      addAutomaticKeepAlives: false,
-      children: <Widget>[
-        new Container(height: 100.0),
-        new Container(height: 100.0),
-        new Container(height: 100.0),
-      ],
-    ));
+    await tester.pumpWidget(
+      new Directionality(
+        textDirection: TextDirection.ltr,
+        child: new ListView(
+          addAutomaticKeepAlives: false,
+          children: <Widget>[
+            new Container(height: 100.0),
+            new Container(height: 100.0),
+            new Container(height: 100.0),
+          ],
+        ),
+      ),
+    );
 
     final RenderSliverList list = tester.renderObject(find.byType(SliverList));
 
@@ -277,32 +300,20 @@ void main() {
 
     expect(list, hasAGoodToStringDeep);
     expect(
-      list.toStringDeep(),
+      list.toStringDeep(minLevel: DiagnosticLevel.info),
       equalsIgnoringHashCodes(
         'RenderSliverList#00000 relayoutBoundary=up1\n'
-        ' │ creator: SliverList ← Viewport ← _ScrollableScope ←\n'
-        ' │   IgnorePointer-[GlobalKey#00000] ← Listener ← _GestureSemantics\n'
-        ' │   ←\n'
-        ' │   RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        ' │   ← RepaintBoundary ← CustomPaint ← RepaintBoundary ←\n'
-        ' │   NotificationListener<ScrollNotification> ←\n'
-        ' │   GlowingOverscrollIndicator ← ⋯\n'
         ' │ parentData: paintOffset=Offset(0.0, 0.0) (can use size)\n'
         ' │ constraints: SliverConstraints(AxisDirection.down,\n'
         ' │   GrowthDirection.forward, ScrollDirection.idle, scrollOffset:\n'
         ' │   0.0, remainingPaintExtent: 600.0, crossAxisExtent: 800.0,\n'
+        ' │   crossAxisDirection: AxisDirection.right,\n'
         ' │   viewportMainAxisExtent: 600.0)\n'
         ' │ geometry: SliverGeometry(scrollExtent: 300.0, paintExtent: 300.0,\n'
         ' │   maxPaintExtent: 300.0)\n'
         ' │ currently live children: 0 to 2\n'
         ' │\n'
         ' ├─child with index 0: RenderRepaintBoundary#00000 relayoutBoundary=up2\n'
-        ' │ │ creator: RepaintBoundary-[<0>] ← SliverList ← Viewport ←\n'
-        ' │ │   _ScrollableScope ← IgnorePointer-[GlobalKey#00000] ← Listener ←\n'
-        ' │ │   _GestureSemantics ←\n'
-        ' │ │   RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        ' │ │   ← RepaintBoundary ← CustomPaint ← RepaintBoundary ←\n'
-        ' │ │   NotificationListener<ScrollNotification> ← ⋯\n'
         ' │ │ parentData: index=0; layoutOffset=0.0 (can use size)\n'
         ' │ │ constraints: BoxConstraints(w=800.0, 0.0<=h<=Infinity)\n'
         ' │ │ layer: OffsetLayer#00000\n'
@@ -312,24 +323,12 @@ void main() {
         ' │ │   repaints)\n'
         ' │ │\n'
         ' │ └─child: RenderConstrainedBox#00000 relayoutBoundary=up3\n'
-        ' │   │ creator: ConstrainedBox ← Container ← RepaintBoundary-[<0>] ←\n'
-        ' │   │   SliverList ← Viewport ← _ScrollableScope ←\n'
-        ' │   │   IgnorePointer-[GlobalKey#00000] ← Listener ← _GestureSemantics\n'
-        ' │   │   ←\n'
-        ' │   │   RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        ' │   │   ← RepaintBoundary ← CustomPaint ← ⋯\n'
         ' │   │ parentData: <none> (can use size)\n'
         ' │   │ constraints: BoxConstraints(w=800.0, 0.0<=h<=Infinity)\n'
         ' │   │ size: Size(800.0, 100.0)\n'
         ' │   │ additionalConstraints: BoxConstraints(0.0<=w<=Infinity, h=100.0)\n'
         ' │   │\n'
         ' │   └─child: RenderLimitedBox#00000\n'
-        ' │     │ creator: LimitedBox ← ConstrainedBox ← Container ←\n'
-        ' │     │   RepaintBoundary-[<0>] ← SliverList ← Viewport ←\n'
-        ' │     │   _ScrollableScope ← IgnorePointer-[GlobalKey#00000] ← Listener ←\n'
-        ' │     │   _GestureSemantics ←\n'
-        ' │     │   RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        ' │     │   ← RepaintBoundary ← ⋯\n'
         ' │     │ parentData: <none> (can use size)\n'
         ' │     │ constraints: BoxConstraints(w=800.0, h=100.0)\n'
         ' │     │ size: Size(800.0, 100.0)\n'
@@ -337,24 +336,12 @@ void main() {
         ' │     │ maxHeight: 0.0\n'
         ' │     │\n'
         ' │     └─child: RenderConstrainedBox#00000\n'
-        ' │         creator: ConstrainedBox ← LimitedBox ← ConstrainedBox ← Container\n'
-        ' │           ← RepaintBoundary-[<0>] ← SliverList ← Viewport ←\n'
-        ' │           _ScrollableScope ← IgnorePointer-[GlobalKey#00000] ← Listener ←\n'
-        ' │           _GestureSemantics ←\n'
-        ' │           RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        ' │           ← ⋯\n'
         ' │         parentData: <none> (can use size)\n'
         ' │         constraints: BoxConstraints(w=800.0, h=100.0)\n'
         ' │         size: Size(800.0, 100.0)\n'
         ' │         additionalConstraints: BoxConstraints(biggest)\n'
         ' │\n'
         ' ├─child with index 1: RenderRepaintBoundary#00000 relayoutBoundary=up2\n'
-        ' │ │ creator: RepaintBoundary-[<1>] ← SliverList ← Viewport ←\n'
-        ' │ │   _ScrollableScope ← IgnorePointer-[GlobalKey#00000] ← Listener ←\n'
-        ' │ │   _GestureSemantics ←\n'
-        ' │ │   RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        ' │ │   ← RepaintBoundary ← CustomPaint ← RepaintBoundary ←\n'
-        ' │ │   NotificationListener<ScrollNotification> ← ⋯\n'
         ' │ │ parentData: index=1; layoutOffset=100.0 (can use size)\n'
         ' │ │ constraints: BoxConstraints(w=800.0, 0.0<=h<=Infinity)\n'
         ' │ │ layer: OffsetLayer#00000\n'
@@ -364,24 +351,12 @@ void main() {
         ' │ │   repaints)\n'
         ' │ │\n'
         ' │ └─child: RenderConstrainedBox#00000 relayoutBoundary=up3\n'
-        ' │   │ creator: ConstrainedBox ← Container ← RepaintBoundary-[<1>] ←\n'
-        ' │   │   SliverList ← Viewport ← _ScrollableScope ←\n'
-        ' │   │   IgnorePointer-[GlobalKey#00000] ← Listener ← _GestureSemantics\n'
-        ' │   │   ←\n'
-        ' │   │   RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        ' │   │   ← RepaintBoundary ← CustomPaint ← ⋯\n'
         ' │   │ parentData: <none> (can use size)\n'
         ' │   │ constraints: BoxConstraints(w=800.0, 0.0<=h<=Infinity)\n'
         ' │   │ size: Size(800.0, 100.0)\n'
         ' │   │ additionalConstraints: BoxConstraints(0.0<=w<=Infinity, h=100.0)\n'
         ' │   │\n'
         ' │   └─child: RenderLimitedBox#00000\n'
-        ' │     │ creator: LimitedBox ← ConstrainedBox ← Container ←\n'
-        ' │     │   RepaintBoundary-[<1>] ← SliverList ← Viewport ←\n'
-        ' │     │   _ScrollableScope ← IgnorePointer-[GlobalKey#00000] ← Listener ←\n'
-        ' │     │   _GestureSemantics ←\n'
-        ' │     │   RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        ' │     │   ← RepaintBoundary ← ⋯\n'
         ' │     │ parentData: <none> (can use size)\n'
         ' │     │ constraints: BoxConstraints(w=800.0, h=100.0)\n'
         ' │     │ size: Size(800.0, 100.0)\n'
@@ -389,24 +364,12 @@ void main() {
         ' │     │ maxHeight: 0.0\n'
         ' │     │\n'
         ' │     └─child: RenderConstrainedBox#00000\n'
-        ' │         creator: ConstrainedBox ← LimitedBox ← ConstrainedBox ← Container\n'
-        ' │           ← RepaintBoundary-[<1>] ← SliverList ← Viewport ←\n'
-        ' │           _ScrollableScope ← IgnorePointer-[GlobalKey#00000] ← Listener ←\n'
-        ' │           _GestureSemantics ←\n'
-        ' │           RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        ' │           ← ⋯\n'
         ' │         parentData: <none> (can use size)\n'
         ' │         constraints: BoxConstraints(w=800.0, h=100.0)\n'
         ' │         size: Size(800.0, 100.0)\n'
         ' │         additionalConstraints: BoxConstraints(biggest)\n'
         ' │\n'
         ' └─child with index 2: RenderRepaintBoundary#00000 relayoutBoundary=up2\n'
-        '   │ creator: RepaintBoundary-[<2>] ← SliverList ← Viewport ←\n'
-        '   │   _ScrollableScope ← IgnorePointer-[GlobalKey#00000] ← Listener ←\n'
-        '   │   _GestureSemantics ←\n'
-        '   │   RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        '   │   ← RepaintBoundary ← CustomPaint ← RepaintBoundary ←\n'
-        '   │   NotificationListener<ScrollNotification> ← ⋯\n'
         '   │ parentData: index=2; layoutOffset=200.0 (can use size)\n'
         '   │ constraints: BoxConstraints(w=800.0, 0.0<=h<=Infinity)\n'
         '   │ layer: OffsetLayer#00000\n'
@@ -416,24 +379,12 @@ void main() {
         '   │   repaints)\n'
         '   │\n'
         '   └─child: RenderConstrainedBox#00000 relayoutBoundary=up3\n'
-        '     │ creator: ConstrainedBox ← Container ← RepaintBoundary-[<2>] ←\n'
-        '     │   SliverList ← Viewport ← _ScrollableScope ←\n'
-        '     │   IgnorePointer-[GlobalKey#00000] ← Listener ← _GestureSemantics\n'
-        '     │   ←\n'
-        '     │   RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        '     │   ← RepaintBoundary ← CustomPaint ← ⋯\n'
         '     │ parentData: <none> (can use size)\n'
         '     │ constraints: BoxConstraints(w=800.0, 0.0<=h<=Infinity)\n'
         '     │ size: Size(800.0, 100.0)\n'
         '     │ additionalConstraints: BoxConstraints(0.0<=w<=Infinity, h=100.0)\n'
         '     │\n'
         '     └─child: RenderLimitedBox#00000\n'
-        '       │ creator: LimitedBox ← ConstrainedBox ← Container ←\n'
-        '       │   RepaintBoundary-[<2>] ← SliverList ← Viewport ←\n'
-        '       │   _ScrollableScope ← IgnorePointer-[GlobalKey#00000] ← Listener ←\n'
-        '       │   _GestureSemantics ←\n'
-        '       │   RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        '       │   ← RepaintBoundary ← ⋯\n'
         '       │ parentData: <none> (can use size)\n'
         '       │ constraints: BoxConstraints(w=800.0, h=100.0)\n'
         '       │ size: Size(800.0, 100.0)\n'
@@ -441,16 +392,10 @@ void main() {
         '       │ maxHeight: 0.0\n'
         '       │\n'
         '       └─child: RenderConstrainedBox#00000\n'
-        '           creator: ConstrainedBox ← LimitedBox ← ConstrainedBox ← Container\n'
-        '             ← RepaintBoundary-[<2>] ← SliverList ← Viewport ←\n'
-        '             _ScrollableScope ← IgnorePointer-[GlobalKey#00000] ← Listener ←\n'
-        '             _GestureSemantics ←\n'
-        '             RawGestureDetector-[LabeledGlobalKey<RawGestureDetectorState>#00000]\n'
-        '             ← ⋯\n'
         '           parentData: <none> (can use size)\n'
         '           constraints: BoxConstraints(w=800.0, h=100.0)\n'
         '           size: Size(800.0, 100.0)\n'
-        '           additionalConstraints: BoxConstraints(biggest)\n',
+        '           additionalConstraints: BoxConstraints(biggest)\n'
       ),
     );
 

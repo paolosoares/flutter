@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'basic.dart';
 import 'framework.dart';
 import 'navigator.dart';
-import 'overlay.dart';
 import 'routes.dart';
 
 /// A modal route that replaces the entire screen.
@@ -32,10 +31,10 @@ abstract class PageRoute<T> extends ModalRoute<T> {
   bool get barrierDismissible => false;
 
   @override
-  bool canTransitionTo(TransitionRoute<dynamic> nextRoute) => nextRoute is PageRoute<dynamic>;
+  bool canTransitionTo(TransitionRoute<dynamic> nextRoute) => nextRoute is PageRoute;
 
   @override
-  bool canTransitionFrom(TransitionRoute<dynamic> nextRoute) => nextRoute is PageRoute<dynamic>;
+  bool canTransitionFrom(TransitionRoute<dynamic> previousRoute) => previousRoute is PageRoute;
 
   @override
   AnimationController createAnimationController() {
@@ -43,11 +42,6 @@ abstract class PageRoute<T> extends ModalRoute<T> {
     if (settings.isInitialRoute)
       controller.value = 1.0;
     return controller;
-  }
-
-  /// Subclasses can override this method to customize how heroes are inserted.
-  void insertHeroOverlayEntry(OverlayEntry entry, Object tag, OverlayState overlay) {
-    overlay.insert(entry);
   }
 }
 
@@ -83,14 +77,15 @@ class PageRouteBuilder<T> extends PageRoute<T> {
     this.transitionDuration: const Duration(milliseconds: 300),
     this.opaque: true,
     this.barrierDismissible: false,
-    this.barrierColor: null,
+    this.barrierColor,
     this.maintainState: true,
   }) : assert(pageBuilder != null),
        assert(transitionsBuilder != null),
-       assert(opaque != null),
        assert(barrierDismissible != null),
        assert(maintainState != null),
-       super(settings: settings);
+       super(settings: settings) {
+    assert(opaque != null);
+  }
 
   /// Used build the route's primary contents.
   ///

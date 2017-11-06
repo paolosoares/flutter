@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:convert' show BASE64, UTF8;
 
+import 'package:flutter_tools/src/artifacts.dart';
 import 'package:json_rpc_2/json_rpc_2.dart' as rpc;
 
 import 'asset.dart';
@@ -12,6 +13,7 @@ import 'base/context.dart';
 import 'base/file_system.dart';
 import 'base/io.dart';
 import 'build_info.dart';
+import 'compile.dart';
 import 'dart/package_map.dart';
 import 'globals.dart';
 import 'vmservice.dart';
@@ -29,7 +31,7 @@ DevFSConfig get devFSConfig => context[DevFSConfig];
 abstract class DevFSContent {
   bool _exists = true;
 
-  /// Return `true` if this is the first time this method is called
+  /// Return true if this is the first time this method is called
   /// or if the entry has been modified since this method was last called.
   bool get isModified;
 
@@ -50,6 +52,13 @@ abstract class DevFSContent {
 // File content to be copied to the device.
 class DevFSFileContent extends DevFSContent {
   DevFSFileContent(this.file);
+
+  static DevFSFileContent clone(DevFSFileContent fsFileContent) {
+    final DevFSFileContent newFsFileContent = new DevFSFileContent(fsFileContent.file);
+    newFsFileContent._linkTarget = fsFileContent._linkTarget;
+    newFsFileContent._fileStat = fsFileContent._fileStat;
+    return newFsFileContent;
+  }
 
   final FileSystemEntity file;
   FileSystemEntity _linkTarget;
@@ -124,7 +133,7 @@ class DevFSByteContent extends DevFSContent {
     _isModified = true;
   }
 
-  /// Return `true` only once so that the content is written to the device only once.
+  /// Return true only once so that the content is written to the device only once.
   @override
   bool get isModified {
     final bool modified = _isModified;
@@ -285,7 +294,8 @@ class _DevFSHttpWriter {
     } catch (e) {
       if (retry < kMaxRetries) {
         printTrace('Retrying writing "$deviceUri" to DevFS due to error: $e');
-        _scheduleWrite(deviceUri, content, retry + 1);
+        // Synchronization is handled by the _completer below.
+        _scheduleWrite(deviceUri, content, retry + 1); // ignore: unawaited_futures
         return;
       } else {
         printError('Error writing "$deviceUri" to DevFS: $e');
@@ -337,6 +347,16 @@ class DevFS {
   Uri _baseUri;
   Uri get baseUri => _baseUri;
 
+  Uri deviceUriToHostUri(Uri deviceUri) {
+    final String deviceUriString = deviceUri.toString();
+    final String baseUriString = baseUri.toString();
+    if (deviceUriString.startsWith(baseUriString)) {
+      final String deviceUriSuffix = deviceUriString.substring(baseUriString.length);
+      return rootDirectory.uri.resolve(deviceUriSuffix);
+    }
+    return deviceUri;
+  }
+
   Future<Uri> create() async {
     printTrace('DevFS: Creating new filesystem on the device ($_baseUri)');
     try {
@@ -361,9 +381,13 @@ class DevFS {
 
   /// Update files on the device and return the number of bytes sync'd
   Future<int> update({
+    String mainPath,
+    String target,
     AssetBundle bundle,
     bool bundleDirty: false,
     Set<String> fileFilter,
+    ResidentCompiler generator,
+    bool fullRestart: false,
   }) async {
     // Mark all entries as possibly deleted.
     for (DevFSContent content in _entries.values) {
@@ -418,6 +442,15 @@ class DevFS {
       String archivePath;
       if (deviceUri.path.startsWith(assetBuildDirPrefix))
         archivePath = deviceUri.path.substring(assetBuildDirPrefix.length);
+      // When doing full restart in preview-dart-2 mode, copy content so
+      // that isModified does not reset last check timestamp because we
+      // want to report all modified files to incremental compiler next time
+      // user does hot reload.
+      // TODO(aam): Remove this logic once we switch to using incremental
+      // compiler for full application compilation when doing full restart.
+      if (fullRestart && generator != null && content is DevFSFileContent) {
+        content = DevFSFileContent.clone(content);
+      }
       if (content.isModified || (bundleDirty && archivePath != null)) {
         dirtyEntries[deviceUri] = content;
         numBytes += content.size;
@@ -425,16 +458,49 @@ class DevFS {
           assetPathsToEvict.add(archivePath);
       }
     });
+    if (generator != null) {
+      // We run generator even if [dirtyEntries] was empty because we want
+      // to keep logic of accepting/rejecting generator's output simple:
+      // we must accept/reject generator's output after every [update] call.
+      // Incremental run with no changes is supposed to be fast (considering
+      // that it is initiated by user key press).
+      final List<String> invalidatedFiles = <String>[];
+      final Set<Uri> filesUris = new Set<Uri>();
+      for (Uri uri in dirtyEntries.keys) {
+        if (!uri.path.startsWith(assetBuildDirPrefix)) {
+          final DevFSContent content = dirtyEntries[uri];
+          if (content is DevFSFileContent) {
+            filesUris.add(uri);
+            invalidatedFiles.add(content.file.uri.toString());
+            numBytes -= content.size;
+          }
+        }
+      }
+      // No need to send source files because all compilation is done on the
+      // host and result of compilation is single kernel file.
+      filesUris.forEach(dirtyEntries.remove);
+      printTrace('Compiling dart to kernel with ${invalidatedFiles.length} updated files');
+      final String compiledBinary = fullRestart
+        ? await compile(
+              sdkRoot: artifacts.getArtifactPath(Artifact.flutterPatchedSdkPath),
+              mainPath: mainPath)
+        : await generator.recompile(mainPath, invalidatedFiles);
+      if (compiledBinary != null && compiledBinary.isNotEmpty)
+        dirtyEntries.putIfAbsent(
+          Uri.parse(target + '.dill'),
+          () => new DevFSFileContent(fs.file(compiledBinary))
+        );
+    }
     if (dirtyEntries.isNotEmpty) {
       printTrace('Updating files');
       if (_httpWriter != null) {
         try {
           await _httpWriter.write(dirtyEntries);
         } on SocketException catch (socketException, stackTrace) {
-          printTrace("DevFS sync failed. Lost connection to device: $socketException");
+          printTrace('DevFS sync failed. Lost connection to device: $socketException');
           throw new DevFSException('Lost connection to device.', socketException, stackTrace);
         } catch (exception, stackTrace) {
-          printError("Could not update files on device: $exception");
+          printError('Could not update files on device: $exception');
           throw new DevFSException('Sync failed', exception, stackTrace);
         }
       } else {

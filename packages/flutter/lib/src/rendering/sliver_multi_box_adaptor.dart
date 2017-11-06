@@ -201,7 +201,7 @@ abstract class RenderSliverMultiBoxAdaptor extends RenderSliver
         child = childAfter(child);
       }
       return true;
-    });
+    }());
   }
 
   @override
@@ -219,8 +219,7 @@ abstract class RenderSliverMultiBoxAdaptor extends RenderSliver
   @override
   void removeAll() {
     super.removeAll();
-    for (RenderBox child in _keepAliveBucket.values)
-      dropChild(child);
+    _keepAliveBucket.values.forEach(dropChild);
     _keepAliveBucket.clear();
   }
 
@@ -274,15 +273,43 @@ abstract class RenderSliverMultiBoxAdaptor extends RenderSliver
   @override
   void redepthChildren() {
     super.redepthChildren();
-    for (RenderBox child in _keepAliveBucket.values)
-      redepthChild(child);
+    _keepAliveBucket.values.forEach(redepthChild);
   }
 
   @override
   void visitChildren(RenderObjectVisitor visitor) {
     super.visitChildren(visitor);
-    for (RenderBox child in _keepAliveBucket.values)
-      visitor(child);
+    _keepAliveBucket.values.forEach(visitor);
+  }
+
+  @override
+  void visitChildrenForSemantics(RenderObjectVisitor visitor) {
+    switch (constraints.normalizedGrowthDirection) {
+      case GrowthDirection.forward:
+        super.visitChildrenForSemantics((RenderObject child) {
+          // The sliver is overlapped at the leading edge; check if trailing edge is visible.
+          final Offset bottomRightInViewport = MatrixUtils.transformPoint(
+              child.getTransformTo(parent), child.semanticBounds.bottomRight
+          );
+          final double endOverlap = constraints.overlap;
+          if ((constraints.axis == Axis.vertical && bottomRightInViewport.dy > endOverlap) ||
+              (constraints.axis == Axis.horizontal && bottomRightInViewport.dx > endOverlap))
+            visitor(child);
+        });
+        break;
+      case GrowthDirection.reverse:
+        super.visitChildrenForSemantics((RenderObject child) {
+          // The sliver is overlapped at the trailing edge; check if leading edge is visible.
+          final Offset topLeftInViewport = MatrixUtils.transformPoint(
+              child.getTransformTo(parent), child.semanticBounds.topLeft
+          );
+          final double startOverlap = constraints.remainingPaintExtent - constraints.overlap;
+          if ((constraints.axis == Axis.vertical && topLeftInViewport.dy < startOverlap) ||
+              (constraints.axis == Axis.horizontal && topLeftInViewport.dx < startOverlap))
+            visitor(child);
+        });
+        break;
+    }
   }
 
   /// Called during layout to create and add the child with the given index and
@@ -517,7 +544,7 @@ abstract class RenderSliverMultiBoxAdaptor extends RenderSliver
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsNode.message(firstChild != null ? 'currently live children: ${indexOf(firstChild)} to ${indexOf(lastChild)}' : 'no children current live'));
   }
@@ -537,7 +564,7 @@ abstract class RenderSliverMultiBoxAdaptor extends RenderSliver
         child = childAfter(child);
       }
       return true;
-    });
+    }());
     return true;
   }
 
@@ -548,7 +575,7 @@ abstract class RenderSliverMultiBoxAdaptor extends RenderSliver
       RenderBox child = firstChild;
       while (true) {
         final SliverMultiBoxAdaptorParentData childParentData = child.parentData;
-        children.add(child.toDiagnosticsNode(name: "child with index ${childParentData.index}"));
+        children.add(child.toDiagnosticsNode(name: 'child with index ${childParentData.index}'));
         if (child == lastChild)
           break;
         child = childParentData.nextSibling;
@@ -558,7 +585,7 @@ abstract class RenderSliverMultiBoxAdaptor extends RenderSliver
       final List<int> indices = _keepAliveBucket.keys.toList()..sort();
       for (int index in indices) {
         children.add(_keepAliveBucket[index].toDiagnosticsNode(
-          name: "child with index $index (kept alive offstage)",
+          name: 'child with index $index (kept alive offstage)',
           style: DiagnosticsTreeStyle.offstage,
         ));
       }

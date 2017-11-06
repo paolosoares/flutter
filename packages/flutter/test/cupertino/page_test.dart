@@ -14,7 +14,7 @@ void main() {
           return new CupertinoPageRoute<Null>(
             settings: settings,
             builder: (BuildContext context) {
-              final String pageNumber = settings.name == '/' ? "1" : "2";
+              final String pageNumber = settings.name == '/' ? '1' : '2';
               return new Center(child: new Text('Page $pageNumber'));
             }
           );
@@ -33,13 +33,13 @@ void main() {
     Offset widget2TopLeft = tester.getTopLeft(find.text('Page 2'));
 
     // Page 1 is moving to the left.
-    expect(widget1TransientTopLeft.dx < widget1InitialTopLeft.dx, true);
+    expect(widget1TransientTopLeft.dx, lessThan(widget1InitialTopLeft.dx));
     // Page 1 isn't moving vertically.
-    expect(widget1TransientTopLeft.dy == widget1InitialTopLeft.dy, true);
+    expect(widget1TransientTopLeft.dy, equals(widget1InitialTopLeft.dy));
     // iOS transition is horizontal only.
-    expect(widget1InitialTopLeft.dy == widget2TopLeft.dy, true);
+    expect(widget1InitialTopLeft.dy, equals(widget2TopLeft.dy));
     // Page 2 is coming in from the right.
-    expect(widget2TopLeft.dx > widget1InitialTopLeft.dx, true);
+    expect(widget2TopLeft.dx, greaterThan(widget1InitialTopLeft.dx));
 
     await tester.pumpAndSettle();
 
@@ -55,13 +55,13 @@ void main() {
     widget2TopLeft = tester.getTopLeft(find.text('Page 2'));
 
     // Page 1 is coming back from the left.
-    expect(widget1TransientTopLeft.dx < widget1InitialTopLeft.dx, true);
+    expect(widget1TransientTopLeft.dx, lessThan(widget1InitialTopLeft.dx));
     // Page 1 isn't moving vertically.
-    expect(widget1TransientTopLeft.dy == widget1InitialTopLeft.dy, true);
+    expect(widget1TransientTopLeft.dy, equals(widget1InitialTopLeft.dy));
     // iOS transition is horizontal only.
-    expect(widget1InitialTopLeft.dy == widget2TopLeft.dy, true);
+    expect(widget1InitialTopLeft.dy, equals(widget2TopLeft.dy));
     // Page 2 is leaving towards the right.
-    expect(widget2TopLeft.dx > widget1InitialTopLeft.dx, true);
+    expect(widget2TopLeft.dx, greaterThan(widget1InitialTopLeft.dx));
 
     await tester.pumpAndSettle();
 
@@ -71,7 +71,7 @@ void main() {
     widget1TransientTopLeft = tester.getTopLeft(find.text('Page 1'));
 
     // Page 1 is back where it started.
-    expect(widget1InitialTopLeft == widget1TransientTopLeft, true);
+    expect(widget1InitialTopLeft, equals(widget1TransientTopLeft));
   });
 
   testWidgets('test iOS fullscreen dialog transition', (WidgetTester tester) async {
@@ -105,11 +105,11 @@ void main() {
     Offset widget2TopLeft = tester.getTopLeft(find.text('Page 2'));
 
     // Page 1 doesn't move.
-    expect(widget1TransientTopLeft == widget1InitialTopLeft, true);
+    expect(widget1TransientTopLeft, equals(widget1InitialTopLeft));
     // Fullscreen dialogs transitions vertically only.
-    expect(widget1InitialTopLeft.dx == widget2TopLeft.dx, true);
+    expect(widget1InitialTopLeft.dx, equals(widget2TopLeft.dx));
     // Page 2 is coming in from the bottom.
-    expect(widget2TopLeft.dy > widget1InitialTopLeft.dy, true);
+    expect(widget2TopLeft.dy, greaterThan(widget1InitialTopLeft.dy));
 
     await tester.pumpAndSettle();
 
@@ -125,11 +125,11 @@ void main() {
     widget2TopLeft = tester.getTopLeft(find.text('Page 2'));
 
     // Page 1 doesn't move.
-    expect(widget1TransientTopLeft == widget1InitialTopLeft, true);
+    expect(widget1TransientTopLeft, equals(widget1InitialTopLeft));
     // Fullscreen dialogs transitions vertically only.
-    expect(widget1InitialTopLeft.dx == widget2TopLeft.dx, true);
+    expect(widget1InitialTopLeft.dx, equals(widget2TopLeft.dx));
     // Page 2 is leaving towards the bottom.
-    expect(widget2TopLeft.dy > widget1InitialTopLeft.dy, true);
+    expect(widget2TopLeft.dy, greaterThan(widget1InitialTopLeft.dy));
 
     await tester.pumpAndSettle();
 
@@ -139,6 +139,50 @@ void main() {
     widget1TransientTopLeft = tester.getTopLeft(find.text('Page 1'));
 
     // Page 1 is back where it started.
-    expect(widget1InitialTopLeft == widget1TransientTopLeft, true);
+    expect(widget1InitialTopLeft, equals(widget1TransientTopLeft));
+  });
+
+  testWidgets('test only edge swipes work', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      new WidgetsApp(
+        color: const Color(0xFFFFFFFF),
+        onGenerateRoute: (RouteSettings settings) {
+          return new CupertinoPageRoute<Null>(
+            settings: settings,
+            builder: (BuildContext context) {
+              final String pageNumber = settings.name == '/' ? '1' : '2';
+              return new Center(child: new Text('Page $pageNumber'));
+            }
+          );
+        },
+      ),
+    );
+
+    tester.state<NavigatorState>(find.byType(Navigator)).pushNamed('/next');
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // Page 2 covers page 1.
+    expect(find.text('Page 1'), findsNothing);
+    expect(find.text('Page 2'), isOnstage);
+
+    // Drag from the middle to the right.
+    TestGesture gesture = await tester.startGesture(const Offset(200.0, 200.0));
+    await gesture.moveBy(const Offset(300.0, 0.0));
+    await tester.pump();
+
+    // Nothing should happen.
+    expect(find.text('Page 1'), findsNothing);
+    expect(find.text('Page 2'), isOnstage);
+
+    // Now drag from the edge.
+    gesture = await tester.startGesture(const Offset(5.0, 200.0));
+    await gesture.moveBy(const Offset(300.0, 0.0));
+    await tester.pump();
+
+    // Page 1 is now visible.
+    expect(find.text('Page 1'), isOnstage);
+    expect(find.text('Page 2'), isOnstage);
   });
 }

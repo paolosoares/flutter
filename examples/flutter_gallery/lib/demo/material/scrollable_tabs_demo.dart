@@ -22,7 +22,7 @@ final List<_Page> _allPages = <_Page>[
   new _Page(icon: Icons.android, text: 'ANDROID'),
   new _Page(icon: Icons.alarm, text: 'ALARM'),
   new _Page(icon: Icons.face, text: 'FACE'),
-  new _Page(icon: Icons.language, text: 'LANGAUGE'),
+  new _Page(icon: Icons.language, text: 'LANGUAGE'),
 ];
 
 class ScrollableTabsDemo extends StatefulWidget {
@@ -83,7 +83,7 @@ class ScrollableTabsDemoState extends State<ScrollableTabsDemo> with SingleTicke
           controller: _controller,
           isScrollable: true,
           tabs: _allPages.map((_Page page) {
-            switch(_demoStyle) {
+            switch (_demoStyle) {
               case TabsDemoStyle.iconsAndText:
                 return new Tab(text: page.text, icon: new Icon(page.icon));
               case TabsDemoStyle.iconsOnly:

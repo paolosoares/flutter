@@ -22,8 +22,6 @@ import '../globals.dart';
 import '../usage.dart';
 import 'flutter_command_runner.dart';
 
-typedef void Validator();
-
 enum ExitStatus {
   success,
   warning,
@@ -56,13 +54,17 @@ class FlutterCommandResult {
   final DateTime endTimeOverride;
 }
 
-abstract class FlutterCommand extends Command<Null> {
-  FlutterCommand() {
-    commandValidator = commonCommandValidator;
-  }
+/// Common flutter command line options.
+class FlutterOptions {
+  static const String kExtraFrontEndOptions = 'extra-front-end-options';
+  static const String kExtraGenSnapshotOptions = 'extra-gen-snapshot-options';
+}
 
+abstract class FlutterCommand extends Command<Null> {
   @override
   FlutterCommandRunner get runner => super.runner;
+
+  bool _requiresPubspecYaml = false;
 
   /// Whether this command uses the 'target' option.
   bool _usesTargetOption = false;
@@ -74,6 +76,10 @@ abstract class FlutterCommand extends Command<Null> {
   bool get shouldUpdateCache => true;
 
   BuildMode _defaultBuildMode;
+
+  void requiresPubspecYaml() {
+    _requiresPubspecYaml = true;
+  }
 
   void usesTargetOption() {
     argParser.addOption('target',
@@ -131,6 +137,31 @@ abstract class FlutterCommand extends Command<Null> {
     if (argResults['release'])
       return BuildMode.release;
     return _defaultBuildMode;
+  }
+
+  void usesFlavorOption() {
+    argParser.addOption(
+      'flavor',
+      help: 'Build a custom app flavor as defined by platform-specific build setup.\n'
+        'Supports the use of product flavors in Android Gradle scripts.\n'
+        'Supports the use of custom Xcode schemes.'
+    );
+  }
+
+  BuildInfo getBuildInfo() {
+    return new BuildInfo(getBuildMode(),
+      argParser.options.containsKey('flavor')
+        ? argResults['flavor']
+        : null,
+      previewDart2: argParser.options.containsKey('preview-dart-2')
+        ? argResults['preview-dart-2']
+        : false,
+      extraFrontEndOptions: argParser.options.containsKey(FlutterOptions.kExtraFrontEndOptions)
+          ? argResults[FlutterOptions.kExtraFrontEndOptions]
+          : null,
+      extraGenSnapshotOptions: argParser.options.containsKey(FlutterOptions.kExtraGenSnapshotOptions)
+          ? argResults[FlutterOptions.kExtraGenSnapshotOptions]
+          : null);
   }
 
   void setupApplicationPackages() {
@@ -200,6 +231,8 @@ abstract class FlutterCommand extends Command<Null> {
   /// rather than calling [runCommand] directly.
   @mustCallSuper
   Future<FlutterCommandResult> verifyThenRunCommand() async {
+    await validateCommand();
+
     // Populate the cache. We call this before pub get below so that the sky_engine
     // package is available in the flutter cache for pub to find.
     if (shouldUpdateCache)
@@ -232,18 +265,18 @@ abstract class FlutterCommand extends Command<Null> {
   Future<List<Device>> findAllTargetDevices() async {
     if (!doctor.canLaunchAnything) {
       printError("Unable to locate a development device; please run 'flutter doctor' "
-          "for information about installing additional components.");
+          'for information about installing additional components.');
       return null;
     }
 
     List<Device> devices = await deviceManager.getDevices().toList();
 
     if (devices.isEmpty && deviceManager.hasSpecifiedDeviceId) {
-      printStatus("No devices found with name or id "
+      printStatus('No devices found with name or id '
           "matching '${deviceManager.specifiedDeviceId}'");
       return null;
     } else if (devices.isEmpty && deviceManager.hasSpecifiedAllDevices) {
-      printStatus("No devices found");
+      printStatus('No devices found');
       return null;
     } else if (devices.isEmpty) {
       printNoConnectedDevices();
@@ -257,10 +290,10 @@ abstract class FlutterCommand extends Command<Null> {
       return null;
     } else if (devices.length > 1 && !deviceManager.hasSpecifiedAllDevices) {
       if (deviceManager.hasSpecifiedDeviceId) {
-        printStatus("Found ${devices.length} devices with name or id matching "
+        printStatus('Found ${devices.length} devices with name or id matching '
             "'${deviceManager.specifiedDeviceId}':");
       } else {
-        printStatus("More than one device connected; please specify a device with "
+        printStatus('More than one device connected; please specify a device with '
             "the '-d <deviceId>' flag, or use '-d all' to act on all devices.");
         devices = await deviceManager.getAllConnectedDevices().toList();
       }
@@ -280,7 +313,7 @@ abstract class FlutterCommand extends Command<Null> {
     if (deviceList == null)
       return null;
     if (deviceList.length > 1) {
-      printStatus("More than one device connected; please specify a device with "
+      printStatus('More than one device connected; please specify a device with '
         "the '-d <deviceId>' flag.");
       deviceList = await deviceManager.getAllConnectedDevices().toList();
       printStatus('');
@@ -294,11 +327,10 @@ abstract class FlutterCommand extends Command<Null> {
     printStatus('No connected devices.');
   }
 
-  // This is a field so that you can modify the value for testing.
-  Validator commandValidator;
-
-  void commonCommandValidator() {
-    if (!PackageMap.isUsingCustomPackagesPath) {
+  @protected
+  @mustCallSuper
+  Future<Null> validateCommand() async {
+    if (_requiresPubspecYaml && !PackageMap.isUsingCustomPackagesPath) {
       // Don't expect a pubspec.yaml file if the user passed in an explicit .packages file path.
       if (!fs.isFileSync('pubspec.yaml')) {
         throw new ToolExit(
@@ -307,6 +339,7 @@ abstract class FlutterCommand extends Command<Null> {
           'Do not run this command from the root of your git clone of Flutter.'
         );
       }
+
       if (fs.isFileSync('flutter.yaml')) {
         throw new ToolExit(
           'Please merge your flutter.yaml into your pubspec.yaml.\n\n'
@@ -324,19 +357,19 @@ abstract class FlutterCommand extends Command<Null> {
           'https://github.com/flutter/flutter/blob/master/examples/flutter_gallery/pubspec.yaml\n'
         );
       }
+
+      // Validate the current package map only if we will not be running "pub get" later.
+      if (parent?.name != 'packages' && !(_usesPubOption && argResults['pub'])) {
+        final String error = new PackageMap(PackageMap.globalPackagesPath).checkValid();
+        if (error != null)
+          throw new ToolExit(error);
+      }
     }
 
     if (_usesTargetOption) {
       final String targetPath = targetFile;
       if (!fs.isFileSync(targetPath))
         throw new ToolExit('Target file "$targetPath" not found.');
-    }
-
-    // Validate the current package map only if we will not be running "pub get" later.
-    if (!(_usesPubOption && argResults['pub'])) {
-      final String error = new PackageMap(PackageMap.globalPackagesPath).checkValid();
-      if (error != null)
-        throw new ToolExit(error);
     }
   }
 

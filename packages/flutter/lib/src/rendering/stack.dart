@@ -134,7 +134,7 @@ class RelativeRect {
   int get hashCode => hashValues(left, top, right, bottom);
 
   @override
-  String toString() => "RelativeRect.fromLTRB(${left?.toStringAsFixed(1)}, ${top?.toStringAsFixed(1)}, ${right?.toStringAsFixed(1)}, ${bottom?.toStringAsFixed(1)})";
+  String toString() => 'RelativeRect.fromLTRB(${left?.toStringAsFixed(1)}, ${top?.toStringAsFixed(1)}, ${right?.toStringAsFixed(1)}, ${bottom?.toStringAsFixed(1)})';
 }
 
 /// Parent data for use with [RenderStack].
@@ -297,13 +297,15 @@ class RenderStack extends RenderBox
   /// top left corners.
   RenderStack({
     List<RenderBox> children,
-    FractionalOffset alignment: FractionalOffset.topLeft,
+    AlignmentGeometry alignment: AlignmentDirectional.topStart,
+    TextDirection textDirection,
     StackFit fit: StackFit.loose,
-    Overflow overflow: Overflow.clip
+    Overflow overflow: Overflow.clip,
   }) : assert(alignment != null),
        assert(fit != null),
        assert(overflow != null),
        _alignment = alignment,
+       _textDirection = textDirection,
        _fit = fit,
        _overflow = overflow {
     addAll(children);
@@ -317,20 +319,55 @@ class RenderStack extends RenderBox
       child.parentData = new StackParentData();
   }
 
-  /// How to align the non-positioned children in the stack.
+  Alignment _resolvedAlignment;
+
+  void _resolve() {
+    if (_resolvedAlignment != null)
+      return;
+    _resolvedAlignment = alignment.resolve(textDirection);
+  }
+
+  void _markNeedResolution() {
+    _resolvedAlignment = null;
+    markNeedsLayout();
+  }
+
+  /// How to align the non-positioned or partially-positioned children in the
+  /// stack.
   ///
   /// The non-positioned children are placed relative to each other such that
   /// the points determined by [alignment] are co-located. For example, if the
-  /// [alignment] is [FractionalOffset.topLeft], then the top left corner of
+  /// [alignment] is [Alignment.topLeft], then the top left corner of
   /// each non-positioned child will be located at the same global coordinate.
-  FractionalOffset get alignment => _alignment;
-  FractionalOffset _alignment;
-  set alignment(FractionalOffset value) {
+  ///
+  /// Partially-positioned children, those that do not specify an alignment in a
+  /// particular axis (e.g. that have neither `top` nor `bottom` set), use the
+  /// alignment to determine how they should be positioned in that
+  /// under-specified axis.
+  ///
+  /// If this is set to an [AlignmentDirectional] object, then [textDirection]
+  /// must not be null.
+  AlignmentGeometry get alignment => _alignment;
+  AlignmentGeometry _alignment;
+  set alignment(AlignmentGeometry value) {
     assert(value != null);
-    if (_alignment != value) {
-      _alignment = value;
-      markNeedsLayout();
-    }
+    if (_alignment == value)
+      return;
+    _alignment = value;
+    _markNeedResolution();
+  }
+
+  /// The text direction with which to resolve [alignment].
+  ///
+  /// This may be changed to null, but only after the [alignment] has been changed
+  /// to a value that does not depend on the direction.
+  TextDirection get textDirection => _textDirection;
+  TextDirection _textDirection;
+  set textDirection(TextDirection value) {
+    if (_textDirection == value)
+      return;
+    _textDirection = value;
+    _markNeedResolution();
   }
 
   /// How to size the non-positioned children in the stack.
@@ -402,6 +439,8 @@ class RenderStack extends RenderBox
 
   @override
   void performLayout() {
+    _resolve();
+    assert(_resolvedAlignment != null);
     _hasVisualOverflow = false;
     bool hasNonPositionedChildren = false;
 
@@ -455,7 +494,7 @@ class RenderStack extends RenderBox
       final StackParentData childParentData = child.parentData;
 
       if (!childParentData.isPositioned) {
-        childParentData.offset = alignment.alongOffset(size - child.size);
+        childParentData.offset = _resolvedAlignment.alongOffset(size - child.size);
       } else {
         BoxConstraints childConstraints = const BoxConstraints();
 
@@ -471,20 +510,26 @@ class RenderStack extends RenderBox
 
         child.layout(childConstraints, parentUsesSize: true);
 
-        double x = 0.0;
-        if (childParentData.left != null)
+        double x;
+        if (childParentData.left != null) {
           x = childParentData.left;
-        else if (childParentData.right != null)
+        } else if (childParentData.right != null) {
           x = size.width - childParentData.right - child.size.width;
+        } else {
+          x = _resolvedAlignment.alongOffset(size - child.size).dx;
+        }
 
         if (x < 0.0 || x + child.size.width > size.width)
           _hasVisualOverflow = true;
 
-        double y = 0.0;
-        if (childParentData.top != null)
+        double y;
+        if (childParentData.top != null) {
           y = childParentData.top;
-        else if (childParentData.bottom != null)
+        } else if (childParentData.bottom != null) {
           y = size.height - childParentData.bottom - child.size.height;
+        } else {
+          y = _resolvedAlignment.alongOffset(size - child.size).dy;
+        }
 
         if (y < 0.0 || y + child.size.height > size.height)
           _hasVisualOverflow = true;
@@ -524,9 +569,10 @@ class RenderStack extends RenderBox
   Rect describeApproximatePaintClip(RenderObject child) => _hasVisualOverflow ? Offset.zero & size : null;
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
-    description.add(new DiagnosticsProperty<FractionalOffset>('alignment', alignment));
+    description.add(new DiagnosticsProperty<AlignmentGeometry>('alignment', alignment));
+    description.add(new EnumProperty<TextDirection>('textDirection', textDirection));
     description.add(new EnumProperty<StackFit>('fit', fit));
     description.add(new EnumProperty<Overflow>('overflow', overflow));
   }
@@ -543,11 +589,13 @@ class RenderIndexedStack extends RenderStack {
   /// If the [index] parameter is null, nothing is displayed.
   RenderIndexedStack({
     List<RenderBox> children,
-    FractionalOffset alignment: FractionalOffset.topLeft,
-    int index: 0
+    AlignmentGeometry alignment: AlignmentDirectional.topStart,
+    TextDirection textDirection,
+    int index: 0,
   }) : _index = index, super(
     children: children,
-    alignment: alignment
+    alignment: alignment,
+    textDirection: textDirection,
   );
 
   @override
@@ -600,7 +648,7 @@ class RenderIndexedStack extends RenderStack {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new IntProperty('index', index));
   }

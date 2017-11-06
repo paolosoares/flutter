@@ -135,7 +135,7 @@ class _DismissibleClipper extends CustomClipper<Rect> {
        super(reclip: moveAnimation);
 
   final Axis axis;
-  final Animation<FractionalOffset> moveAnimation;
+  final Animation<Offset> moveAnimation;
 
   @override
   Rect getClip(Size size) {
@@ -175,7 +175,7 @@ class _DismissibleState extends State<Dismissible> with TickerProviderStateMixin
   }
 
   AnimationController _moveController;
-  Animation<FractionalOffset> _moveAnimation;
+  Animation<Offset> _moveAnimation;
 
   AnimationController _resizeController;
   Animation<double> _resizeAnimation;
@@ -268,11 +268,10 @@ class _DismissibleState extends State<Dismissible> with TickerProviderStateMixin
   }
 
   void _updateMoveAnimation() {
-    _moveAnimation = new FractionalOffsetTween(
-      begin: FractionalOffset.topLeft,
-      end: _directionIsXAxis ?
-             new FractionalOffset(_dragExtent.sign, 0.0) :
-             new FractionalOffset(0.0, _dragExtent.sign)
+    final double end = _dragExtent.sign;
+    _moveAnimation = new Tween<Offset>(
+      begin: Offset.zero,
+      end: _directionIsXAxis ? new Offset(end, 0.0) : new Offset(0.0, end),
     ).animate(_moveController);
   }
 
@@ -285,7 +284,7 @@ class _DismissibleState extends State<Dismissible> with TickerProviderStateMixin
     if (_directionIsXAxis) {
       if (vx.abs() - vy.abs() < _kMinFlingVelocityDelta)
         return false;
-      switch(widget.direction) {
+      switch (widget.direction) {
         case DismissDirection.horizontal:
           return vx.abs() > _kMinFlingVelocity;
         case DismissDirection.endToStart:
@@ -296,7 +295,7 @@ class _DismissibleState extends State<Dismissible> with TickerProviderStateMixin
     } else {
       if (vy.abs() - vx.abs() < _kMinFlingVelocityDelta)
         return false;
-      switch(widget.direction) {
+      switch (widget.direction) {
         case DismissDirection.vertical:
           return vy.abs() > _kMinFlingVelocity;
         case DismissDirection.up:
@@ -388,7 +387,7 @@ class _DismissibleState extends State<Dismissible> with TickerProviderStateMixin
           );
         }
         return true;
-      });
+      }());
 
       return new SizeTransition(
         sizeFactor: _resizeAnimation,

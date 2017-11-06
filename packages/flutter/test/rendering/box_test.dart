@@ -9,12 +9,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'rendering_tester.dart';
 
 void main() {
-  test("should size to render view", () {
+  test('should size to render view', () {
     final RenderBox root = new RenderDecoratedBox(
       decoration: new BoxDecoration(
         color: const Color(0xFF00FF00),
         gradient: new RadialGradient(
-          center: FractionalOffset.topLeft, radius: 1.8,
+          center: Alignment.topLeft, radius: 1.8,
           colors: <Color>[Colors.yellow[500], Colors.blue[500]],
         ),
         boxShadow: kElevationToShadow[3],
@@ -65,18 +65,18 @@ void main() {
     expect(outer.size.height, equals(600.0));
   });
 
-  test("should not have a 0 sized colored Box", () {
+  test('should not have a 0 sized colored Box', () {
     final RenderBox coloredBox = new RenderDecoratedBox(
       decoration: const BoxDecoration(),
     );
 
     expect(coloredBox, hasAGoodToStringDeep);
-    expect(coloredBox.toStringDeep(), equalsIgnoringHashCodes(
+    expect(coloredBox.toStringDeep(minLevel: DiagnosticLevel.info), equalsIgnoringHashCodes(
         'RenderDecoratedBox#00000 NEEDS-LAYOUT NEEDS-PAINT DETACHED\n'
-        '   parentData: null\n'
-        '   constraints: null\n'
+        '   parentData: MISSING\n'
+        '   constraints: MISSING\n'
         '   size: MISSING\n'
-        '   decoration:\n'
+        '   decoration: BoxDecoration:\n'
         '     <no decorations specified>\n'
         '   configuration: ImageConfiguration()\n'));
 
@@ -94,20 +94,20 @@ void main() {
 
     expect(coloredBox, hasAGoodToStringDeep);
     expect(
-      coloredBox.toStringDeep(),
+      coloredBox.toStringDeep(minLevel: DiagnosticLevel.info),
       equalsIgnoringHashCodes(
         'RenderDecoratedBox#00000 NEEDS-PAINT\n'
         '   parentData: offset=Offset(10.0, 10.0) (can use size)\n'
         '   constraints: BoxConstraints(w=780.0, h=580.0)\n'
         '   size: Size(780.0, 580.0)\n'
-        '   decoration:\n'
+        '   decoration: BoxDecoration:\n'
         '     <no decorations specified>\n'
         '   configuration: ImageConfiguration()\n',
       ),
     );
   });
 
-  test("reparenting should clear position", () {
+  test('reparenting should clear position', () {
     final RenderDecoratedBox coloredBox = new RenderDecoratedBox(
       decoration: const BoxDecoration(),
     );

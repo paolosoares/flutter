@@ -18,7 +18,7 @@ final Tween<double> _kRadialReactionRadiusTween = new Tween<double>(begin: 0.0, 
 /// This class handles storing the current value, dispatching ValueChanged on a
 /// tap gesture and driving a changed animation. Subclasses are responsible for
 /// painting.
-abstract class RenderToggleable extends RenderConstrainedBox implements SemanticsActionHandler {
+abstract class RenderToggleable extends RenderConstrainedBox {
   /// Creates a toggleable render object.
   ///
   /// The [value], [activeColor], and [inactiveColor] arguments must not be
@@ -122,7 +122,7 @@ abstract class RenderToggleable extends RenderConstrainedBox implements Semantic
     if (value == _value)
       return;
     _value = value;
-    markNeedsSemanticsUpdate(onlyChanges: true, noGeometry: true);
+    markNeedsSemanticsUpdate(onlyLocalUpdates: true);
     _position
       ..curve = Curves.easeIn
       ..reverseCurve = Curves.easeOut;
@@ -178,7 +178,7 @@ abstract class RenderToggleable extends RenderConstrainedBox implements Semantic
     _onChanged = value;
     if (wasInteractive != isInteractive) {
       markNeedsPaint();
-      markNeedsSemanticsUpdate(noGeometry: true);
+      markNeedsSemanticsUpdate();
     }
   }
 
@@ -283,27 +283,17 @@ abstract class RenderToggleable extends RenderConstrainedBox implements Semantic
   }
 
   @override
-  bool get isSemanticBoundary => isInteractive;
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
 
-  @override
-  SemanticsAnnotator get semanticsAnnotator => _annotate;
-
-  void _annotate(SemanticsNode semantics) {
-    semantics
-      ..hasCheckedState = true
-      ..isChecked = _value;
+    config.isSemanticBoundary = isInteractive;
     if (isInteractive)
-      semantics.addAction(SemanticsAction.tap);
+      config.addAction(SemanticsAction.tap, _handleTap);
+    config.isChecked = _value;
   }
 
   @override
-  void performAction(SemanticsAction action) {
-    if (action == SemanticsAction.tap)
-      _handleTap();
-  }
-
-  @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new FlagProperty('value', value: value, ifTrue: 'checked', ifFalse: 'unchecked', showName: true));
     description.add(new FlagProperty('isInteractive', value: isInteractive,  ifTrue: 'enabled', ifFalse: 'disabled', defaultValue: true));

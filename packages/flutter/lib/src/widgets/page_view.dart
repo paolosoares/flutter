@@ -10,6 +10,7 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/rendering.dart';
 
 import 'basic.dart';
+import 'debug.dart';
 import 'framework.dart';
 import 'notification_listener.dart';
 import 'page_storage.dart';
@@ -100,10 +101,8 @@ class PageController extends ScrollController {
 
   /// Changes which page is displayed in the controlled [PageView].
   ///
-  /// The animation lasts for the given duration and follows the given curve.
-  /// The returned [Future] resolves when the animation completes.
-  ///
-  /// The `duration` and `curve` arguments must not be null.
+  /// Jumps the page position from its current value to the given value,
+  /// without animation, and without checking if the new value is in range.
   void jumpToPage(int page) {
     final _PagePosition position = this.position;
     position.jumpTo(position.getPixelsFromPage(page.toDouble()));
@@ -115,8 +114,8 @@ class PageController extends ScrollController {
   /// The returned [Future] resolves when the animation completes.
   ///
   /// The `duration` and `curve` arguments must not be null.
-  void nextPage({ @required Duration duration, @required Curve curve }) {
-    animateToPage(page.round() + 1, duration: duration, curve: curve);
+  Future<Null> nextPage({ @required Duration duration, @required Curve curve }) {
+    return animateToPage(page.round() + 1, duration: duration, curve: curve);
   }
 
   /// Animates the controlled [PageView] to the previous page.
@@ -125,8 +124,8 @@ class PageController extends ScrollController {
   /// The returned [Future] resolves when the animation completes.
   ///
   /// The `duration` and `curve` arguments must not be null.
-  void previousPage({ @required Duration duration, @required Curve curve }) {
-    animateToPage(page.round() - 1, duration: duration, curve: curve);
+  Future<Null> previousPage({ @required Duration duration, @required Curve curve }) {
+    return animateToPage(page.round() - 1, duration: duration, curve: curve);
   }
 
   @override
@@ -345,6 +344,7 @@ class PageView extends StatefulWidget {
     this.reverse: false,
     PageController controller,
     this.physics,
+    this.pageSnapping: true,
     this.onPageChanged,
     List<Widget> children: const <Widget>[],
   }) : controller = controller ?? _defaultPageController,
@@ -369,6 +369,7 @@ class PageView extends StatefulWidget {
     this.reverse: false,
     PageController controller,
     this.physics,
+    this.pageSnapping: true,
     this.onPageChanged,
     @required IndexedWidgetBuilder itemBuilder,
     int itemCount,
@@ -384,6 +385,7 @@ class PageView extends StatefulWidget {
     this.reverse: false,
     PageController controller,
     this.physics,
+    this.pageSnapping: true,
     this.onPageChanged,
     @required this.childrenDelegate,
   }) : assert(childrenDelegate != null),
@@ -424,6 +426,9 @@ class PageView extends StatefulWidget {
   /// Defaults to matching platform conventions.
   final ScrollPhysics physics;
 
+  /// Set to false to disable page snapping, useful for custom scroll behavior.
+  final bool pageSnapping;
+
   /// Called whenever the page in the center of the viewport changes.
   final ValueChanged<int> onPageChanged;
 
@@ -449,10 +454,12 @@ class _PageViewState extends State<PageView> {
   }
 
   AxisDirection _getDirection(BuildContext context) {
-    // TODO(abarth): Consider reading direction.
     switch (widget.scrollDirection) {
       case Axis.horizontal:
-        return widget.reverse ? AxisDirection.left : AxisDirection.right;
+        assert(debugCheckHasDirectionality(context));
+        final TextDirection textDirection = Directionality.of(context);
+        final AxisDirection axisDirection = textDirectionToAxisDirection(textDirection);
+        return widget.reverse ? flipAxisDirection(axisDirection) : axisDirection;
       case Axis.vertical:
         return widget.reverse ? AxisDirection.up : AxisDirection.down;
     }
@@ -462,6 +469,10 @@ class _PageViewState extends State<PageView> {
   @override
   Widget build(BuildContext context) {
     final AxisDirection axisDirection = _getDirection(context);
+    final ScrollPhysics physics = widget.pageSnapping
+        ? _kPagePhysics.applyTo(widget.physics)
+        : widget.physics;
+
     return new NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification notification) {
         if (notification.depth == 0 && widget.onPageChanged != null && notification is ScrollUpdateNotification) {
@@ -477,7 +488,7 @@ class _PageViewState extends State<PageView> {
       child: new Scrollable(
         axisDirection: axisDirection,
         controller: widget.controller,
-        physics: widget.physics == null ? _kPagePhysics : _kPagePhysics.applyTo(widget.physics),
+        physics: physics,
         viewportBuilder: (BuildContext context, ViewportOffset position) {
           return new Viewport(
             axisDirection: axisDirection,
@@ -495,11 +506,12 @@ class _PageViewState extends State<PageView> {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new EnumProperty<Axis>('scrollDirection', widget.scrollDirection));
     description.add(new FlagProperty('reverse', value: widget.reverse, ifTrue: 'reversed'));
     description.add(new DiagnosticsProperty<PageController>('controller', widget.controller, showName: false));
     description.add(new DiagnosticsProperty<ScrollPhysics>('physics', widget.physics, showName: false));
+    description.add(new FlagProperty('pageSnapping', value: widget.pageSnapping, ifFalse: 'snapping disabled'));
   }
 }

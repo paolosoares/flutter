@@ -57,7 +57,7 @@ class TickerMode extends InheritedWidget {
   bool updateShouldNotify(TickerMode old) => enabled != old.enabled;
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new FlagProperty('mode', value: enabled, ifTrue: 'enabled', ifFalse: 'disabled', showName: true));
   }
@@ -92,7 +92,7 @@ abstract class SingleTickerProviderStateMixin extends State<dynamic> implements 
         'objects and those objects might use it more than one time in total, then instead of '
         'mixing in a SingleTickerProviderStateMixin, use a regular TickerProviderStateMixin.'
       );
-    });
+    }());
     _ticker = new Ticker(onTick, debugLabel: 'created by $this');
     // We assume that this is called from initState, build, or some sort of
     // event handler, and that thus TickerMode.of(context) would return true. We
@@ -115,7 +115,7 @@ abstract class SingleTickerProviderStateMixin extends State<dynamic> implements 
         'Otherwise, the ticker will leak.\n'
         'The offending ticker was: ${_ticker.toString(debugIncludeStack: true)}'
       );
-    });
+    }());
     super.dispose();
   }
 
@@ -127,7 +127,7 @@ abstract class SingleTickerProviderStateMixin extends State<dynamic> implements 
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     String tickerDescription;
     if (_ticker != null) {
@@ -195,7 +195,7 @@ abstract class TickerProviderStateMixin extends State<dynamic> implements Ticker
         }
       }
       return true;
-    });
+    }());
     super.dispose();
   }
 
@@ -210,7 +210,7 @@ abstract class TickerProviderStateMixin extends State<dynamic> implements Ticker
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<Set<Ticker>>(
       'tickers',

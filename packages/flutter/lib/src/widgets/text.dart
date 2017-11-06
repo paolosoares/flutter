@@ -141,7 +141,7 @@ class DefaultTextStyle extends InheritedWidget {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     style?.debugFillProperties(description);
   }
@@ -200,6 +200,7 @@ class Text extends StatelessWidget {
     Key key,
     this.style,
     this.textAlign,
+    this.textDirection,
     this.softWrap,
     this.overflow,
     this.textScaleFactor,
@@ -220,6 +221,21 @@ class Text extends StatelessWidget {
   /// How the text should be aligned horizontally.
   final TextAlign textAlign;
 
+  /// The directionality of the text.
+  ///
+  /// This decides how [textAlign] values like [TextAlign.start] and
+  /// [TextAlign.end] are interpreted.
+  ///
+  /// This is also used to disambiguate how to render bidirectional text. For
+  /// example, if the [data] is an English phrase followed by a Hebrew phrase,
+  /// in a [TextDirection.ltr] context the English phrase will be on the left
+  /// and the Hebrew phrase to its right, while in a [TextDirection.rtl]
+  /// context, the English phrase will be on the right and the Hebrow phrase on
+  /// its left.
+  ///
+  /// Defaults to the ambient [Directionality], if any.
+  final TextDirection textDirection;
+
   /// Whether the text should break at soft line breaks.
   ///
   /// If false, the glyphs in the text will be positioned as if there was unlimited horizontal space.
@@ -233,7 +249,8 @@ class Text extends StatelessWidget {
   /// For example, if the text scale factor is 1.5, text will be 50% larger than
   /// the specified font size.
   ///
-  /// Defaults to the [MediaQueryData.textScaleFactor] obtained from the ambient
+  /// The value given to the constructor as textScaleFactor.  If null, will
+  /// use the [MediaQueryData.textScaleFactor] obtained from the ambient
   /// [MediaQuery], or 1.0 if there is no [MediaQuery] in scope.
   final double textScaleFactor;
 
@@ -257,7 +274,8 @@ class Text extends StatelessWidget {
     if (style == null || style.inherit)
       effectiveTextStyle = defaultTextStyle.style.merge(style);
     return new RichText(
-      textAlign: textAlign ?? defaultTextStyle.textAlign,
+      textAlign: textAlign ?? defaultTextStyle.textAlign ?? TextAlign.start,
+      textDirection: textDirection, // RichText uses Directionality.of to obtain a default if this is null.
       softWrap: softWrap ?? defaultTextStyle.softWrap,
       overflow: overflow ?? defaultTextStyle.overflow,
       textScaleFactor: textScaleFactor ?? MediaQuery.of(context, nullOk: true)?.textScaleFactor ?? 1.0,
@@ -270,9 +288,15 @@ class Text extends StatelessWidget {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new StringProperty('data', data, showName: false));
     style?.debugFillProperties(description);
+    description.add(new EnumProperty<TextAlign>('textAlign', textAlign, defaultValue: null));
+    description.add(new EnumProperty<TextDirection>('textDirection', textDirection, defaultValue: null));
+    description.add(new FlagProperty('softWrap', value: softWrap, ifTrue: 'wrapping at box width', ifFalse: 'no wrapping except at line break characters', showName: true));
+    description.add(new EnumProperty<TextOverflow>('overflow', overflow, defaultValue: null));
+    description.add(new DoubleProperty('textScaleFactor', textScaleFactor, defaultValue: null));
+    description.add(new IntProperty('maxLines', maxLines, defaultValue: null));
   }
 }

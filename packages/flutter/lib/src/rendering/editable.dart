@@ -7,6 +7,7 @@ import 'dart:ui' as ui show TextBox;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import 'box.dart';
@@ -87,6 +88,10 @@ class TextSelectionPoint {
 class RenderEditable extends RenderBox {
   /// Creates a render object that implements the visual aspects of a text field.
   ///
+  /// The [textAlign] argument must not be null. It defaults to [TextAlign.start].
+  ///
+  /// The [textDirection] argument must not be null.
+  ///
   /// If [showCursor] is not specified, then it defaults to hiding the cursor.
   ///
   /// The [maxLines] property can be set to null to remove the restriction on
@@ -97,9 +102,11 @@ class RenderEditable extends RenderBox {
   /// ViewportOffset.zero] if you have no need for scrolling.
   RenderEditable({
     TextSpan text,
-    TextAlign textAlign,
+    @required TextDirection textDirection,
+    TextAlign textAlign: TextAlign.start,
     Color cursorColor,
     ValueNotifier<bool> showCursor,
+    bool hasFocus,
     int maxLines: 1,
     Color selectionColor,
     double textScaleFactor: 1.0,
@@ -107,12 +114,20 @@ class RenderEditable extends RenderBox {
     @required ViewportOffset offset,
     this.onSelectionChanged,
     this.onCaretChanged,
-  }) : assert(maxLines == null || maxLines > 0),
+  }) : assert(textAlign != null),
+       assert(textDirection != null, 'RenderEditable created without a textDirection.'),
+       assert(maxLines == null || maxLines > 0),
        assert(textScaleFactor != null),
        assert(offset != null),
-       _textPainter = new TextPainter(text: text, textAlign: textAlign, textScaleFactor: textScaleFactor),
+       _textPainter = new TextPainter(
+         text: text,
+         textAlign: textAlign,
+         textDirection: textDirection,
+         textScaleFactor: textScaleFactor,
+       ),
        _cursorColor = cursorColor,
        _showCursor = showCursor ?? new ValueNotifier<bool>(false),
+       _hasFocus = hasFocus ?? false,
        _maxLines = maxLines,
        _selection = selection,
        _offset = offset {
@@ -146,7 +161,7 @@ class RenderEditable extends RenderBox {
     markNeedsLayout();
   }
 
-  /// The text to display
+  /// The text to display.
   TextSpan get text => _textPainter.text;
   final TextPainter _textPainter;
   set text(TextSpan value) {
@@ -157,12 +172,37 @@ class RenderEditable extends RenderBox {
   }
 
   /// How the text should be aligned horizontally.
+  ///
+  /// This must not be null.
   TextAlign get textAlign => _textPainter.textAlign;
   set textAlign(TextAlign value) {
+    assert(value != null);
     if (_textPainter.textAlign == value)
       return;
     _textPainter.textAlign = value;
     markNeedsPaint();
+  }
+
+  /// The directionality of the text.
+  ///
+  /// This decides how the [TextAlign.start], [TextAlign.end], and
+  /// [TextAlign.justify] values of [textAlign] are interpreted.
+  ///
+  /// This is also used to disambiguate how to render bidirectional text. For
+  /// example, if the [text] is an English phrase followed by a Hebrew phrase,
+  /// in a [TextDirection.ltr] context the English phrase will be on the left
+  /// and the Hebrew phrase to its right, while in a [TextDirection.rtl]
+  /// context, the English phrase will be on the right and the Hebrow phrase on
+  /// its left.
+  ///
+  /// This must not be null.
+  TextDirection get textDirection => _textPainter.textDirection;
+  set textDirection(TextDirection value) {
+    assert(value != null);
+    if (_textPainter.textDirection == value)
+      return;
+    _textPainter.textDirection = value;
+    markNeedsTextLayout();
   }
 
   /// The color to use when painting the cursor.
@@ -188,6 +228,17 @@ class RenderEditable extends RenderBox {
     if (attached)
       _showCursor.addListener(markNeedsPaint);
     markNeedsPaint();
+  }
+
+  /// Whether the editable is currently focused.
+  bool get hasFocus => _hasFocus;
+  bool _hasFocus;
+  set hasFocus(bool value) {
+    assert(value != null);
+    if (_hasFocus == value)
+      return;
+    _hasFocus = value;
+    markNeedsSemanticsUpdate();
   }
 
   /// The maximum number of lines for the text to span, wrapping if necessary.
@@ -267,6 +318,15 @@ class RenderEditable extends RenderBox {
   }
 
   @override
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
+
+    config
+      ..isFocused = hasFocus
+      ..isTextField = true;
+  }
+
+  @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
     _offset.addListener(markNeedsPaint);
@@ -325,6 +385,11 @@ class RenderEditable extends RenderBox {
   /// and the returned list is of length two. In this case, however, the two
   /// points might actually be co-located (e.g., because of a bidirectional
   /// selection that contains some text but whose ends meet in the middle).
+  ///
+  /// See also:
+  ///
+  ///  * [getLocalRectForCaret], which is the equivalent but for
+  ///    a [TextPosition] rather than a [TextSelection].
   List<TextSelectionPoint> getEndpointsForSelection(TextSelection selection) {
     assert(constraints != null);
     _layoutText(constraints.maxWidth);
@@ -334,7 +399,7 @@ class RenderEditable extends RenderBox {
     if (selection.isCollapsed) {
       // TODO(mpcomplete): This doesn't work well at an RTL/LTR boundary.
       final Offset caretOffset = _textPainter.getOffsetForCaret(selection.extent, _caretPrototype);
-      final Offset start = new Offset(0.0, _preferredLineHeight) + caretOffset + paintOffset;
+      final Offset start = new Offset(0.0, preferredLineHeight) + caretOffset + paintOffset;
       return <TextSelectionPoint>[new TextSelectionPoint(start, null)];
     } else {
       final List<ui.TextBox> boxes = _textPainter.getBoxesForSelection(selection);
@@ -348,19 +413,35 @@ class RenderEditable extends RenderBox {
   }
 
   /// Returns the position in the text for the given global coordinate.
+  ///
+  /// See also:
+  ///
+  ///  * [getLocalRectForCaret], which is the reverse operation, taking
+  ///    a [TextPosition] and returning a [Rect].
+  ///  * [TextPainter.getPositionForOffset], which is the equivalent method
+  ///    for a [TextPainter] object.
   TextPosition getPositionForPoint(Offset globalPosition) {
     _layoutText(constraints.maxWidth);
     globalPosition += -_paintOffset;
     return _textPainter.getPositionForOffset(globalToLocal(globalPosition));
   }
 
-  /// Returns the Rect in local coordinates for the caret at the given text
+  /// Returns the [Rect] in local coordinates for the caret at the given text
   /// position.
+  ///
+  /// See also:
+  ///
+  ///  * [getPositionForPoint], which is the reverse operation, taking
+  ///    an [Offset] in global coordinates and returning a [TextPosition].
+  ///  * [getEndpointsForSelection], which is the equivalent but for
+  ///    a selection rather than a particular text position.
+  ///  * [TextPainter.getOffsetForCaret], the equivalent method for a
+  ///    [TextPainter] object.
   Rect getLocalRectForCaret(TextPosition caretPosition) {
     _layoutText(constraints.maxWidth);
     final Offset caretOffset = _textPainter.getOffsetForCaret(caretPosition, _caretPrototype);
     // This rect is the same as _caretPrototype but without the vertical padding.
-    return new Rect.fromLTWH(0.0, 0.0, _kCaretWidth, _preferredLineHeight).shift(caretOffset + _paintOffset);
+    return new Rect.fromLTWH(0.0, 0.0, _kCaretWidth, preferredLineHeight).shift(caretOffset + _paintOffset);
   }
 
   @override
@@ -375,12 +456,13 @@ class RenderEditable extends RenderBox {
     return _textPainter.maxIntrinsicWidth;
   }
 
-  // This does not required the layout to be updated.
-  double get _preferredLineHeight => _textPainter.preferredLineHeight;
+  /// An estimate of the height of a line in the text. See [TextPainter.preferredLineHeight].
+  /// This does not required the layout to be updated.
+  double get preferredLineHeight => _textPainter.preferredLineHeight;
 
   double _preferredHeight(double width) {
     if (maxLines != null)
-      return _preferredLineHeight * maxLines;
+      return preferredLineHeight * maxLines;
     if (width == double.INFINITY) {
       final String text = _textPainter.text.toPlainText();
       int lines = 1;
@@ -388,10 +470,10 @@ class RenderEditable extends RenderBox {
         if (text.codeUnitAt(index) == 0x0A) // count explicit line breaks
           lines += 1;
       }
-      return _preferredLineHeight * lines;
+      return preferredLineHeight * lines;
     }
     _layoutText(width);
-    return math.max(_preferredLineHeight, _textPainter.height);
+    return math.max(preferredLineHeight, _textPainter.height);
   }
 
   @override
@@ -477,7 +559,7 @@ class RenderEditable extends RenderBox {
   @override
   void performLayout() {
     _layoutText(constraints.maxWidth);
-    _caretPrototype = new Rect.fromLTWH(0.0, _kCaretHeightOffset, _kCaretWidth, _preferredLineHeight - 2.0 * _kCaretHeightOffset);
+    _caretPrototype = new Rect.fromLTWH(0.0, _kCaretHeightOffset, _kCaretWidth, preferredLineHeight - 2.0 * _kCaretHeightOffset);
     _selectionRects = null;
     // We grab _textPainter.size here because assigning to `size` on the next
     // line will trigger us to validate our intrinsic sizes, which will change
@@ -546,7 +628,7 @@ class RenderEditable extends RenderBox {
   Rect describeApproximatePaintClip(RenderObject child) => _hasVisualOverflow ? Offset.zero & size : null;
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<Color>('cursorColor', cursorColor));
     description.add(new DiagnosticsProperty<ValueNotifier<bool>>('showCursor', showCursor));

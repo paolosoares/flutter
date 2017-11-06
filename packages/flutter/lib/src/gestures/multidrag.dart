@@ -45,6 +45,8 @@ abstract class MultiDragPointerState {
   Offset get pendingDelta => _pendingDelta;
   Offset _pendingDelta = Offset.zero;
 
+  Duration _lastPendingEventTimestamp;
+
   GestureArenaEntry _arenaEntry;
   void _setArenaEntry(GestureArenaEntry entry) {
     assert(_arenaEntry == null);
@@ -62,17 +64,20 @@ abstract class MultiDragPointerState {
 
   void _move(PointerMoveEvent event) {
     assert(_arenaEntry != null);
-    _velocityTracker.addPosition(event.timeStamp, event.position);
+    if (!event.synthesized)
+      _velocityTracker.addPosition(event.timeStamp, event.position);
     if (_client != null) {
       assert(pendingDelta == null);
       // Call client last to avoid reentrancy.
       _client.update(new DragUpdateDetails(
+        sourceTimeStamp: event.timeStamp,
         delta: event.delta,
         globalPosition: event.position,
       ));
     } else {
       assert(pendingDelta != null);
       _pendingDelta += event.delta;
+      _lastPendingEventTimestamp = event.timeStamp;
       checkForResolutionAfterMove();
     }
   }
@@ -100,6 +105,7 @@ abstract class MultiDragPointerState {
     assert(_client == null);
     assert(pendingDelta != null);
     _pendingDelta = null;
+    _lastPendingEventTimestamp = null;
     _arenaEntry = null;
   }
 
@@ -110,10 +116,12 @@ abstract class MultiDragPointerState {
     assert(pendingDelta != null);
     _client = client;
     final DragUpdateDetails details = new DragUpdateDetails(
+      sourceTimeStamp: _lastPendingEventTimestamp,
       delta: pendingDelta,
       globalPosition: initialPosition,
     );
     _pendingDelta = null;
+    _lastPendingEventTimestamp = null;
     // Call client last to avoid reentrancy.
     _client.update(details);
   }
@@ -130,6 +138,7 @@ abstract class MultiDragPointerState {
     } else {
       assert(pendingDelta != null);
       _pendingDelta = null;
+      _lastPendingEventTimestamp = null;
     }
   }
 
@@ -144,6 +153,7 @@ abstract class MultiDragPointerState {
     } else {
       assert(pendingDelta != null);
       _pendingDelta = null;
+      _lastPendingEventTimestamp = null;
     }
   }
 
@@ -153,7 +163,7 @@ abstract class MultiDragPointerState {
   void dispose() {
     _arenaEntry?.resolve(GestureDisposition.rejected);
     _arenaEntry = null;
-    assert(() { _pendingDelta = null; return true; });
+    assert(() { _pendingDelta = null; return true; }());
   }
 }
 
@@ -283,8 +293,7 @@ abstract class MultiDragGestureRecognizer<T extends MultiDragPointerState> exten
 
   @override
   void dispose() {
-    for (int pointer in _pointers.keys.toList())
-      _removeState(pointer);
+    _pointers.keys.toList().forEach(_removeState);
     assert(_pointers.isEmpty);
     _pointers = null;
     super.dispose();
@@ -333,7 +342,7 @@ class ImmediateMultiDragGestureRecognizer extends MultiDragGestureRecognizer<_Im
   }
 
   @override
-  String toStringShort() => 'multidrag';
+  String get debugDescription => 'multidrag';
 }
 
 
@@ -379,7 +388,7 @@ class HorizontalMultiDragGestureRecognizer extends MultiDragGestureRecognizer<_H
   }
 
   @override
-  String toStringShort() => 'horizontal multidrag';
+  String get debugDescription => 'horizontal multidrag';
 }
 
 
@@ -425,7 +434,7 @@ class VerticalMultiDragGestureRecognizer extends MultiDragGestureRecognizer<_Ver
   }
 
   @override
-  String toStringShort() => 'vertical multidrag';
+  String get debugDescription => 'vertical multidrag';
 }
 
 class _DelayedPointerState extends MultiDragPointerState {
@@ -532,5 +541,5 @@ class DelayedMultiDragGestureRecognizer extends MultiDragGestureRecognizer<_Dela
   }
 
   @override
-  String toStringShort() => 'long multidrag';
+  String get debugDescription => 'long multidrag';
 }

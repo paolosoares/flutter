@@ -34,7 +34,7 @@ class IOSWorkflow extends DoctorValidator implements Workflow {
 
   Future<bool> get hasIosDeploy => exitsHappyAsync(<String>['ios-deploy', '--version']);
 
-  String get iosDeployMinimumVersion => '1.9.0';
+  String get iosDeployMinimumVersion => '1.9.2';
 
   Future<String> get iosDeployVersionText async => (await runAsync(<String>['ios-deploy', '--version'])).processResult.stdout.replaceAll('\n', '');
 
@@ -91,7 +91,7 @@ class IOSWorkflow extends DoctorValidator implements Workflow {
         xcodeStatus = ValidationType.partial;
         messages.add(new ValidationMessage.error(
           'Your Mac needs to enabled for developer mode before using Xcode for the first time.\n'
-          'Run \'sudo DevToolsSecurity -enable\' or open Xcode'
+          'Run \'sudo DevToolsSecurity -enable\' to enable developer mode.'
         ));
       }
 
@@ -125,10 +125,19 @@ class IOSWorkflow extends DoctorValidator implements Workflow {
     if (hasHomebrew) {
       brewStatus = ValidationType.installed;
 
-      if (!await iMobileDevice.isWorking) {
+      if (!iMobileDevice.isInstalled) {
         brewStatus = ValidationType.partial;
         messages.add(new ValidationMessage.error(
-            'libimobiledevice and ideviceinstaller are not installed or require updating. To update, run:\n'
+            'libimobiledevice and ideviceinstaller are not installed. To install, run:\n'
+            '  brew install --HEAD libimobiledevice\n'
+            '  brew install ideviceinstaller'
+        ));
+      } else if (!await iMobileDevice.isWorking) {
+        brewStatus = ValidationType.partial;
+        messages.add(new ValidationMessage.error(
+            'Verify that all connected devices have been paired with this computer in Xcode.\n'
+            'If all devices have been paired, libimobiledevice and ideviceinstaller may require updating.\n'
+            'To update, run:\n'
             '  brew uninstall --ignore-dependencies libimobiledevice\n'
             '  brew install --HEAD libimobiledevice\n'
             '  brew install ideviceinstaller'
@@ -136,7 +145,7 @@ class IOSWorkflow extends DoctorValidator implements Workflow {
       } else if (!await hasIDeviceInstaller) {
         brewStatus = ValidationType.partial;
         messages.add(new ValidationMessage.error(
-          'ideviceinstaller not available; this is used to discover connected iOS devices.\n'
+          'ideviceinstaller is not installed; this is used to discover connected iOS devices.\n'
           'To install, run:\n'
           '  brew install --HEAD libimobiledevice\n'
           '  brew install ideviceinstaller'

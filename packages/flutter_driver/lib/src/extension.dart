@@ -262,7 +262,10 @@ class FlutterDriverExtension {
 
   Future<TapResult> _tap(Command command) async {
     final Tap tapCommand = command;
-    await _prober.tap(await _waitForElement(_createFinder(tapCommand.finder)));
+    final Finder computedFinder = await _waitForElement(
+      _createFinder(tapCommand.finder).hitTestable()
+    );
+    await _prober.tap(computedFinder);
     return new TapResult();
   }
 
@@ -324,7 +327,7 @@ class FlutterDriverExtension {
 
   Future<RequestDataResult> _requestData(Command command) async {
     final RequestData requestDataCommand = command;
-    return new RequestDataResult(_requestDataHandler == null ? '' : await _requestDataHandler(requestDataCommand.message));
+    return new RequestDataResult(_requestDataHandler == null ? 'No requestData Extension registered' : await _requestDataHandler(requestDataCommand.message));
   }
 
   Future<SetFrameSyncResult> _setFrameSync(Command command) async {

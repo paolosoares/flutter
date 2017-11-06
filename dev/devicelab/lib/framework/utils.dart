@@ -98,6 +98,21 @@ void copy(File sourceFile, Directory targetDirectory, {String name}) {
   target.writeAsBytesSync(sourceFile.readAsBytesSync());
 }
 
+void recursiveCopy(Directory source, Directory target) {
+  if (!target.existsSync())
+    target.createSync();
+
+  for (FileSystemEntity entity in source.listSync(followLinks: false)) {
+    final String name = path.basename(entity.path);
+    if (entity is Directory)
+      recursiveCopy(entity, new Directory(path.join(target.path, name)));
+    else if (entity is File) {
+      final File dest = new File(path.join(target.path, name));
+      dest.writeAsBytesSync(entity.readAsBytesSync());
+    }
+  }
+}
+
 FileSystemEntity move(FileSystemEntity whatToMove,
     {Directory to, String name}) {
   return whatToMove
@@ -472,4 +487,14 @@ String extractCloudAuthTokenArg(List<String> rawArgs) {
     return null;
   }
   return token;
+}
+
+// "An Observatory debugger and profiler on ... is available at: http://127.0.0.1:8100/"
+final RegExp _kObservatoryRegExp = new RegExp(r'An Observatory debugger .* is available at: (\S+:(\d+))');
+
+bool lineContainsServicePort(String line) => line.contains(_kObservatoryRegExp);
+
+int parseServicePort(String line) {
+  final Match match = _kObservatoryRegExp.firstMatch(line);
+  return match == null ? null : int.parse(match.group(2));
 }

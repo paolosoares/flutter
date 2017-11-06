@@ -175,7 +175,7 @@ class Material extends StatefulWidget {
   _MaterialState createState() => new _MaterialState();
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new EnumProperty<MaterialType>('type', type));
     description.add(new DoubleProperty('elevation', elevation));
@@ -394,7 +394,7 @@ abstract class InkFeature {
   @mustCallSuper
   void dispose() {
     assert(!_debugDisposed);
-    assert(() { _debugDisposed = true; return true; });
+    assert(() { _debugDisposed = true; return true; }());
     _controller._removeFeature(this);
     if (onRemoved != null)
       onRemoved();

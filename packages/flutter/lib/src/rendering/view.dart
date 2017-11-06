@@ -184,7 +184,7 @@ class RenderView extends RenderObject with RenderObjectWithChildMixin<RenderBox>
   ///
   /// Actually causes the output of the rendering pipeline to appear on screen.
   void compositeFrame() {
-    Timeline.startSync('Compositing');
+    Timeline.startSync('Compositing', arguments: timelineWhitelistArguments);
     try {
       final ui.SceneBuilder builder = new ui.SceneBuilder();
       layer.addToScene(builder, Offset.zero);
@@ -193,9 +193,9 @@ class RenderView extends RenderObject with RenderObjectWithChildMixin<RenderBox>
       scene.dispose();
       assert(() {
         if (debugRepaintRainbowEnabled || debugRepaintTextRainbowEnabled)
-          debugCurrentRepaintColor = debugCurrentRepaintColor.withHue(debugCurrentRepaintColor.hue + debugRepaintRainbowHueIncrement);
+          debugCurrentRepaintColor = debugCurrentRepaintColor.withHue(debugCurrentRepaintColor.hue + 2.0);
         return true;
-      });
+      }());
     } finally {
       Timeline.finishSync();
     }
@@ -211,14 +211,14 @@ class RenderView extends RenderObject with RenderObjectWithChildMixin<RenderBox>
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     // call to ${super.debugFillProperties(description)} is omitted because the
     // root superclasses don't include any interesting information for this
     // class
     assert(() {
       description.add(new DiagnosticsNode.message('debug mode enabled - ${Platform.operatingSystem}'));
       return true;
-    });
+    }());
     description.add(new DiagnosticsProperty<Size>('window size', ui.window.physicalSize, tooltip: 'in physical pixels'));
     description.add(new DoubleProperty('device pixel ratio', ui.window.devicePixelRatio, tooltip: 'physical pixels per logical pixel'));
     description.add(new DiagnosticsProperty<ViewConfiguration>('configuration', configuration, tooltip: 'in logical pixels'));

@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 
 import 'basic_types.dart';
 
+const String _kDefaultDebugLabel = 'unknown';
+
 /// An immutable style in which paint text.
 ///
 /// ## Sample code
@@ -122,6 +124,86 @@ import 'basic_types.dart';
 /// )
 /// ```
 ///
+/// ### Custom Fonts
+///
+/// Custom fonts can be declared in the `pubspec.yaml` file as shown below:
+///
+///```yaml
+/// flutter:
+///   fonts:
+///     - family: Raleway
+///       fonts:
+///         - asset: fonts/Raleway-Regular.ttf
+///         - asset: fonts/Raleway-Medium.ttf
+///           weight: 500
+///         - asset: assets/fonts/Raleway-SemiBold.ttf
+///           weight: 600
+///      - family: Schyler
+///        fonts:
+///          - asset: fonts/Schyler-Regular.ttf
+///          - asset: fonts/Schyler-Italic.ttf
+///            style: italic
+///```
+///
+/// The `family` property determines the name of the font, which you can use in
+/// the [fontFamily] argument. The `asset` property is a path to the font file,
+/// relative to the `pubspec.yaml` file. The `weight` property specifies the
+/// weight of the glyph outlines in the file as an integer multiple of 100
+/// between 100 and 900. This corresponds to the [FontWeight] class and can be
+/// used in the [fontWeight] argument. The `style` property specfies whether the
+/// outlines in the file are `italic` or `normal`. These values correspond to
+/// the [FontStyle] class and can be used in the [fontStyle] argument.
+///
+/// To select a custom font, create [TextStyle] using the [fontFamily]
+/// argument as shown in the example below:
+///
+/// ```dart
+/// const TextStyle(fontFamily: 'Raleway')
+/// ```
+///
+/// To use a font family defined in a package, the [package] argument must be
+/// provided. For instance, suppose the font declaration above is in the
+/// `pubspec.yaml` of a package named `my_package` which the app depends on.
+/// Then creating the TextStyle is done as follows:
+///
+/// ```dart
+/// const TextStyle(fontFamily: 'Raleway', package: 'my_package')
+/// ```
+///
+/// If the package internally uses the font it defines, it should still specify
+/// the `package` argument when creating the text style as in the example above.
+///
+/// A package can also provide font files without declaring a font in its
+/// `pubspec.yaml`. These files should then be in the `lib/` folder of the
+/// package. The font files will not automatically be bundled in the app, instead
+/// the app can use these selectively when declaring a font. Suppose a package
+/// named `my_package` has:
+///
+/// ```
+/// lib/fonts/Raleway-Medium.ttf
+/// ```
+///
+/// Then the app can declare a font like in the example below:
+///
+///```yaml
+/// flutter:
+///   fonts:
+///     - family: Raleway
+///       fonts:
+///         - asset: assets/fonts/Raleway-Regular.ttf
+///         - asset: packages/my_package/fonts/Raleway-Medium.ttf
+///           weight: 500
+///```
+///
+/// The `lib/` is implied, so it should not be included in the asset path.
+///
+/// In this case, since the app locally defines the font, the TextStyle is
+/// created without the `package` argument:
+///
+///```dart
+/// const TextStyle(fontFamily: 'Raleway')
+/// ```
+///
 /// See also:
 ///
 ///  * [Text], the widget for showing text in a single style.
@@ -131,12 +213,15 @@ import 'basic_types.dart';
 ///  * [TextSpan], the class that wraps a [TextStyle] for the purposes of
 ///    passing it to a [RichText].
 @immutable
-class TextStyle extends TreeDiagnostics {
+class TextStyle extends Diagnosticable {
   /// Creates a text style.
+  ///
+  /// The `package` argument must be non-null if the font family is defined in a
+  /// package. It is combined with the `fontFamily` argument to set the
+  /// [fontFamily] property.
   const TextStyle({
     this.inherit: true,
     this.color,
-    this.fontFamily,
     this.fontSize,
     this.fontWeight,
     this.fontStyle,
@@ -147,7 +232,12 @@ class TextStyle extends TreeDiagnostics {
     this.decoration,
     this.decorationColor,
     this.decorationStyle,
-  }) : assert(inherit != null);
+    this.debugLabel,
+    String fontFamily,
+    String package,
+  }) : fontFamily = package == null ? fontFamily : 'packages/$package/$fontFamily',
+       assert(inherit != null);
+
 
   /// Whether null values are replaced with their value in an ancestor text
   /// style (e.g., in a [TextSpan] tree).
@@ -160,7 +250,11 @@ class TextStyle extends TreeDiagnostics {
   /// The color to use when painting the text.
   final Color color;
 
-  /// The name of the font to use when painting the text (e.g., Roboto).
+  /// The name of the font to use when painting the text (e.g., Roboto). If the
+  /// font is defined in a package, this will be prefixed with
+  /// 'packages/package_name/' (e.g. 'packages/cool_fonts/Roboto'). The
+  /// prefixing is done by the constructor when the `package` argument is
+  /// provided.
   final String fontFamily;
 
   /// The size of glyphs (in logical pixels) to use when painting the text.
@@ -168,7 +262,13 @@ class TextStyle extends TreeDiagnostics {
   /// During painting, the [fontSize] is multiplied by the current
   /// `textScaleFactor` to let users make it easier to read text by increasing
   /// its size.
+  ///
+  /// [getParagraphStyle] will default to 14 logical pixels if the font size
+  /// isn't specified here.
   final double fontSize;
+
+  // The default font size if none is specified.
+  static const double _defaultFontSize = 14.0;
 
   /// The typeface thickness to use when painting the text (e.g., bold).
   final FontWeight fontWeight;
@@ -205,6 +305,19 @@ class TextStyle extends TreeDiagnostics {
   /// The style in which to paint the text decorations (e.g., dashed).
   final TextDecorationStyle decorationStyle;
 
+  /// A human-readable description of this text style.
+  ///
+  /// This property is maintained only in debug builds.
+  ///
+  /// When merging ([merge]), copying ([copyWith]), modifying using [apply], or
+  /// interpolating ([lerp]), the label of the resulting style is marked with
+  /// the debug labels of the original styles. This helps figuring out where a
+  /// particular text style came from.
+  ///
+  /// This property is not considered when comparing text styles using `==` or
+  /// [compareTo], and it does not affect [hashCode].
+  final String debugLabel;
+
   /// Creates a copy of this text style but with the given fields replaced with
   /// the new values.
   TextStyle copyWith({
@@ -220,7 +333,14 @@ class TextStyle extends TreeDiagnostics {
     TextDecoration decoration,
     Color decorationColor,
     TextDecorationStyle decorationStyle,
+    String debugLabel,
   }) {
+    String newDebugLabel;
+    assert(() {
+      if (this.debugLabel != null)
+        newDebugLabel = debugLabel ?? 'copy of ${this.debugLabel}';
+      return true;
+    }());
     return new TextStyle(
       inherit: inherit,
       color: color ?? this.color,
@@ -235,11 +355,18 @@ class TextStyle extends TreeDiagnostics {
       decoration: decoration ?? this.decoration,
       decorationColor: decorationColor ?? this.decorationColor,
       decorationStyle: decorationStyle ?? this.decorationStyle,
+      debugLabel: newDebugLabel,
     );
   }
 
-  /// Creates a copy of this text style but with the numeric fields multiplied
-  /// by the given factors and then incremented by the given deltas.
+  /// Creates a copy of this text style replacing or altering the specified
+  /// properties.
+  ///
+  /// The non-numeric properties [color], [fontFamily], [decoration],
+  /// [decorationColor] and [decorationStyle] are replaced with the new values.
+  ///
+  /// The numeric properties are multiplied by the given factors and then
+  /// incremented by the given deltas.
   ///
   /// For example, `style.apply(fontSizeFactor: 2.0, fontSizeDelta: 1.0)` would
   /// return a [TextStyle] whose [fontSize] is `style.fontSize * 2.0 + 1.0`.
@@ -249,14 +376,15 @@ class TextStyle extends TreeDiagnostics {
   /// applied to a `style` whose [fontWeight] is [FontWeight.w500] will return a
   /// [TextStyle] with a [FontWeight.w300].
   ///
-  /// The arguments must not be null.
+  /// The numeric arguments must not be null.
   ///
   /// If the underlying values are null, then the corresponding factors and/or
   /// deltas must not be specified.
-  ///
-  /// The non-numeric fields can be controlled using the corresponding arguments.
   TextStyle apply({
     Color color,
+    TextDecoration decoration,
+    Color decorationColor,
+    TextDecorationStyle decorationStyle,
     String fontFamily,
     double fontSizeFactor: 1.0,
     double fontSizeDelta: 0.0,
@@ -282,6 +410,14 @@ class TextStyle extends TreeDiagnostics {
     assert(heightFactor != null);
     assert(heightDelta != null);
     assert(heightFactor != null || (heightFactor == 1.0 && heightDelta == 0.0));
+
+    String modifiedDebugLabel;
+    assert(() {
+      if (debugLabel != null)
+        modifiedDebugLabel = 'modified $debugLabel';
+      return true;
+    }());
+
     return new TextStyle(
       inherit: inherit,
       color: color ?? this.color,
@@ -293,19 +429,40 @@ class TextStyle extends TreeDiagnostics {
       wordSpacing: wordSpacing == null ? null : wordSpacing * wordSpacingFactor + wordSpacingDelta,
       textBaseline: textBaseline,
       height: height == null ? null : height * heightFactor + heightDelta,
-      decoration: decoration,
-      decorationColor: decorationColor,
-      decorationStyle: decorationStyle,
+      decoration: decoration ?? this.decoration,
+      decorationColor: decorationColor ?? this.decorationColor,
+      decorationStyle: decorationStyle ?? this.decorationStyle,
+      debugLabel: modifiedDebugLabel,
     );
   }
 
-  /// Returns a new text style that matches this text style but with some values
-  /// replaced by the non-null parameters of the given text style. If the given
-  /// text style is null, simply returns this text style.
+  /// Returns a new text style that is a combination of this style and the given
+  /// [other] style.
+  ///
+  /// If the given [other] text style has its [TextStyle.inherit] set to true,
+  /// its null properties are replaced with the non-null properties of this text
+  /// style. The [other] style _inherits_ the properties of this style. Another
+  /// way to think of it is that the "missing" properties of the [other] style
+  /// are _filled_ by the properties of this style.
+  ///
+  /// If the given [other] text style has its [TextStyle.inherit] set to false,
+  /// returns the given [other] style unchanged. The [other] style does not
+  /// inherit properties of this style.
+  ///
+  /// If the given text style is null, returns this text style.
   TextStyle merge(TextStyle other) {
     if (other == null)
       return this;
-    assert(other.inherit);
+    if (!other.inherit)
+      return other;
+
+    String mergedDebugLabel;
+    assert(() {
+      if (other.debugLabel != null || debugLabel != null)
+        mergedDebugLabel = '${other.debugLabel ?? _kDefaultDebugLabel} < ${debugLabel ?? _kDefaultDebugLabel}';
+      return true;
+    }());
+
     return copyWith(
       color: other.color,
       fontFamily: other.fontFamily,
@@ -318,7 +475,8 @@ class TextStyle extends TreeDiagnostics {
       height: other.height,
       decoration: other.decoration,
       decorationColor: other.decorationColor,
-      decorationStyle: other.decorationStyle
+      decorationStyle: other.decorationStyle,
+      debugLabel: mergedDebugLabel,
     );
   }
 
@@ -327,6 +485,13 @@ class TextStyle extends TreeDiagnostics {
   /// This will not work well if the styles don't set the same fields.
   static TextStyle lerp(TextStyle begin, TextStyle end, double t) {
     assert(begin.inherit == end.inherit);
+
+    String lerpDebugLabel;
+    assert(() {
+      lerpDebugLabel = 'lerp(${begin.debugLabel ?? _kDefaultDebugLabel}, ${end.debugLabel ?? _kDefaultDebugLabel})';
+      return true;
+    }());
+
     return new TextStyle(
       inherit: end.inherit,
       color: Color.lerp(begin.color, end.color, t),
@@ -340,7 +505,8 @@ class TextStyle extends TreeDiagnostics {
       height: ui.lerpDouble(begin.height ?? end.height, end.height ?? begin.height, t),
       decoration: t < 0.5 ? begin.decoration : end.decoration,
       decorationColor: Color.lerp(begin.decorationColor, end.decorationColor, t),
-      decorationStyle: t < 0.5 ? begin.decorationStyle : end.decorationStyle
+      decorationStyle: t < 0.5 ? begin.decorationStyle : end.decorationStyle,
+      debugLabel: lerpDebugLabel,
     );
   }
 
@@ -367,8 +533,12 @@ class TextStyle extends TreeDiagnostics {
   /// The `textScaleFactor` argument must not be null. If omitted, it defaults
   /// to 1.0. The other arguments may be null. The `maxLines` argument, if
   /// specified and non-null, must be greater than zero.
+  ///
+  /// If the font size on this style isn't set, it will default to 14 logical
+  /// pixels.
   ui.ParagraphStyle getParagraphStyle({
       TextAlign textAlign,
+      TextDirection textDirection,
       double textScaleFactor: 1.0,
       String ellipsis,
       int maxLines,
@@ -377,10 +547,11 @@ class TextStyle extends TreeDiagnostics {
     assert(maxLines == null || maxLines > 0);
     return new ui.ParagraphStyle(
       textAlign: textAlign,
+      textDirection: textDirection,
       fontWeight: fontWeight,
       fontStyle: fontStyle,
       fontFamily: fontFamily,
-      fontSize: fontSize == null ? null : fontSize * textScaleFactor,
+      fontSize: (fontSize ?? _defaultFontSize) * textScaleFactor,
       lineHeight: height,
       maxLines: maxLines,
       ellipsis: ellipsis,
@@ -418,7 +589,7 @@ class TextStyle extends TreeDiagnostics {
   bool operator ==(dynamic other) {
     if (identical(this, other))
       return true;
-    if (other is! TextStyle)
+    if (other.runtimeType != runtimeType)
       return false;
     final TextStyle typedOther = other;
     return inherit == typedOther.inherit &&
@@ -456,24 +627,14 @@ class TextStyle extends TreeDiagnostics {
   }
 
   @override
-  DiagnosticsNode toDiagnosticsNode({
-    String name,
-    DiagnosticsTreeStyle style: DiagnosticsTreeStyle.singleLine,
-  }) {
-    return new DiagnosticsNode.lazy(
-      name: name,
-      value: this,
-      style: style,
-      description: '$runtimeType',
-      fillProperties: debugFillProperties,
-    );
-  }
-
-  @override
-  String toString() => toDiagnosticsNode().toString();
+  String toStringShort() => '$runtimeType';
 
   /// Adds all properties prefixing property names with the optional `prefix`.
-  void debugFillProperties(List<DiagnosticsNode> properties, { String prefix: '' }) {
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties, { String prefix: '' }) {
+    super.debugFillProperties(properties);
+    if (debugLabel != null)
+      properties.add(new MessageProperty('${prefix}debugLabel', debugLabel));
     final List<DiagnosticsNode> styles = <DiagnosticsNode>[];
     styles.add(new DiagnosticsProperty<Color>('${prefix}color', color, defaultValue: null));
     styles.add(new StringProperty('${prefix}family', fontFamily, defaultValue: null, quoted: false));
@@ -520,8 +681,8 @@ class TextStyle extends TreeDiagnostics {
       defaultValue: null,
     ));
     styles.add(new EnumProperty<FontStyle>('${prefix}style', fontStyle, defaultValue: null));
-    styles.add(new DoubleProperty('${prefix}letterSpacing', letterSpacing, unit: 'x', defaultValue: null));
-    styles.add(new DoubleProperty('${prefix}wordSpacing', wordSpacing, unit: 'x', defaultValue: null));
+    styles.add(new DoubleProperty('${prefix}letterSpacing', letterSpacing, defaultValue: null));
+    styles.add(new DoubleProperty('${prefix}wordSpacing', wordSpacing, defaultValue: null));
     styles.add(new EnumProperty<TextBaseline>('${prefix}baseline', textBaseline, defaultValue: null));
     styles.add(new DoubleProperty('${prefix}height', height, unit: 'x', defaultValue: null));
     if (decoration != null || decorationColor != null || decorationStyle != null) {
@@ -531,7 +692,7 @@ class TextStyle extends TreeDiagnostics {
 
       // Hide decorationColor from the default text view as it is shown in the
       // terse decoration summary as well.
-      styles.add(new DiagnosticsProperty<Color>('${prefix}decorationColor', decorationColor, defaultValue: null, hidden: true));
+      styles.add(new DiagnosticsProperty<Color>('${prefix}decorationColor', decorationColor, defaultValue: null, level: DiagnosticLevel.fine));
 
       if (decorationColor != null)
         decorationDescription.add('$decorationColor');
@@ -539,16 +700,17 @@ class TextStyle extends TreeDiagnostics {
       // Intentionally collide with the property 'decoration' added below.
       // Tools that show hidden properties could choose the first property
       // matching the name to disambiguate.
-      styles.add(new DiagnosticsProperty<TextDecoration>('${prefix}decoration', decoration, defaultValue: null, hidden: true));
+      styles.add(new DiagnosticsProperty<TextDecoration>('${prefix}decoration', decoration, defaultValue: null, level: DiagnosticLevel.hidden));
       if (decoration != null)
         decorationDescription.add('$decoration');
       assert(decorationDescription.isNotEmpty);
       styles.add(new MessageProperty('${prefix}decoration', decorationDescription.join(' ')));
     }
 
-    final bool styleSpecified = styles.any((DiagnosticsNode n) => !n.hidden);
-    properties.add(new DiagnosticsProperty<bool>('${prefix}inherit', inherit, hidden: !styleSpecified && inherit));
-    properties.addAll(styles);
+    final bool styleSpecified = styles.any((DiagnosticsNode n) => !n.isFiltered(DiagnosticLevel.info));
+    properties.add(new DiagnosticsProperty<bool>('${prefix}inherit', inherit, level: (!styleSpecified && inherit) ? DiagnosticLevel.fine : DiagnosticLevel.info));
+    styles.forEach(properties.add);
+
     if (!styleSpecified)
       properties.add(new FlagProperty('inherit', value: inherit, ifTrue: '$prefix<all styles inherited>', ifFalse: '$prefix<no style specified>'));
   }

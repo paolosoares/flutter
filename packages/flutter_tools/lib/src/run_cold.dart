@@ -20,6 +20,7 @@ class ColdRunner extends ResidentRunner {
     bool usesTerminalUI: true,
     this.traceStartup: false,
     this.applicationBinary,
+    this.previewDart2 : false,
     bool stayResident: true,
   }) : super(devices,
              target: target,
@@ -29,6 +30,7 @@ class ColdRunner extends ResidentRunner {
 
   final bool traceStartup;
   final String applicationBinary;
+  final bool previewDart2;
 
   @override
   Future<int> run({
@@ -88,7 +90,7 @@ class ColdRunner extends ResidentRunner {
         try {
           await downloadStartupTrace(device.vmServices.first);
         } catch (error) {
-          printError(error);
+          printError('Error downloading startup trace: $error');
           return 2;
         }
       }

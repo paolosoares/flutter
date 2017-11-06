@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show debugDumpRenderTree, debugDumpLayerTree, debugDumpSemanticsTree;
+import 'package:flutter/rendering.dart' show debugDumpRenderTree, debugDumpLayerTree, debugDumpSemanticsTree, DebugSemanticsDumpOrder;
 import 'package:flutter/scheduler.dart' show timeDilation;
 import 'stock_data.dart';
 import 'stock_list.dart';
@@ -86,7 +86,7 @@ class StockHomeState extends State<StockHome> {
   }
 
   void _handleStockMenu(BuildContext context, _StockMenuItem value) {
-    switch(value) {
+    switch (value) {
       case _StockMenuItem.autorefresh:
         setState(() {
           _autorefresh = !_autorefresh;
@@ -130,7 +130,7 @@ class StockHomeState extends State<StockHome> {
                 debugDumpApp();
                 debugDumpRenderTree();
                 debugDumpLayerTree();
-                debugDumpSemanticsTree();
+                debugDumpSemanticsTree(DebugSemanticsDumpOrder.traversal);
               } catch (e, stack) {
                 debugPrint('Exception while dumping app:\n$e\n$stack');
               }
@@ -245,9 +245,9 @@ class StockHomeState extends State<StockHome> {
       stock.lastSale += 1.0;
     });
     _scaffoldKey.currentState.showSnackBar(new SnackBar(
-      content: new Text("Purchased ${stock.symbol} for ${stock.lastSale}"),
+      content: new Text('Purchased ${stock.symbol} for ${stock.lastSale}'),
       action: new SnackBarAction(
-        label: "BUY MORE",
+        label: 'BUY MORE',
         onPressed: () {
           _buyStock(stock);
         },
@@ -278,7 +278,7 @@ class StockHomeState extends State<StockHome> {
     );
   }
 
-  static const List<String> portfolioSymbols = const <String>["AAPL","FIZZ", "FIVE", "FLAT", "ZINC", "ZNGA"];
+  static const List<String> portfolioSymbols = const <String>['AAPL','FIZZ', 'FIVE', 'FLAT', 'ZINC', 'ZNGA'];
 
   Widget buildSearchBar() {
     return new AppBar(

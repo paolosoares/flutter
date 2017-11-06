@@ -59,9 +59,21 @@ tasks:
     stage: devicelab
     required_agent_capabilities: ["has-android-device"]
 
+  flavors_test:
+    description: >
+      Checks that flavored builds work on Android.
+    stage: devicelab
+    required_agent_capabilities: ["has-android-device"]
+
   channels_integration_test:
     description: >
       Checks that platform channels work on Android.
+    stage: devicelab
+    required_agent_capabilities: ["has-android-device"]
+
+  platform_interaction_test:
+    description: >
+      Checks platform interaction on Android.
     stage: devicelab
     required_agent_capabilities: ["has-android-device"]
 
@@ -80,6 +92,13 @@ tasks:
   hot_mode_dev_cycle__benchmark:
     description: >
       Measures the performance of Dart VM hot patching feature.
+    stage: devicelab
+    required_agent_capabilities: ["has-android-device"]
+
+  hot_mode_dev_cycle__preview_dart_2_benchmark:
+    description: >
+      Measures the performance of Dart VM hot patching feature under
+      --preview-dart-2 option, that enables Dart 2.0 frontend.
     stage: devicelab
     required_agent_capabilities: ["has-android-device"]
 
@@ -119,7 +138,12 @@ tasks:
       Runs tests of flutter run commands.
     stage: devicelab
     required_agent_capabilities: ["has-android-device"]
-    flaky: true
+
+  service_extensions_test:
+    description: >
+      Validates our service protocol extensions.
+    stage: devicelab
+    required_agent_capabilities: ["has-android-device"]
 
   android_sample_catalog_generator:
     description: >
@@ -155,9 +179,21 @@ tasks:
 
   # iOS on-device tests
 
+  flavors_test_ios:
+    description: >
+      Checks that flavored builds work on iOS.
+    stage: devicelab_ios
+    required_agent_capabilities: ["has-ios-device"]
+
   channels_integration_test_ios:
     description: >
       Checks that platform channels work on iOS.
+    stage: devicelab_ios
+    required_agent_capabilities: ["has-ios-device"]
+
+  platform_interaction_test_ios:
+    description: >
+      Checks platform interaction on iOS.
     stage: devicelab_ios
     required_agent_capabilities: ["has-ios-device"]
 
@@ -174,19 +210,19 @@ tasks:
     stage: devicelab_ios
     required_agent_capabilities: ["has-ios-device"]
 
-#  flutter_gallery_ios__start_up:
-#    description: >
-#      Measures the startup time of the Flutter Gallery app on iOS.
-#    stage: devicelab_ios
-#    required_agent_capabilities: ["has-ios-device"]
-#    flaky: true
+  flutter_gallery_ios__start_up:
+    description: >
+      Measures the startup time of the Flutter Gallery app on iOS.
+    stage: devicelab_ios
+    required_agent_capabilities: ["has-ios-device"]
+    flaky: true
 
-#  complex_layout_ios__start_up:
-#    description: >
-#      Measures the startup time of the Complex Layout sample app on iOS.
-#    stage: devicelab_ios
-#    required_agent_capabilities: ["has-ios-device"]
-#    flaky: true
+  complex_layout_ios__start_up:
+    description: >
+      Measures the startup time of the Complex Layout sample app on iOS.
+    stage: devicelab_ios
+    required_agent_capabilities: ["has-ios-device"]
+    flaky: true
 
   flutter_gallery_ios__transition_perf:
     description: >
@@ -201,13 +237,13 @@ tasks:
     stage: devicelab_ios
     required_agent_capabilities: ["has-ios-device"]
 
-#  microbenchmarks_ios:
-#    description: >
-#      Runs benchmarks from dev/benchmarks/microbenchmarks on iOS.
-#    stage: devicelab_ios
-#    required_agent_capabilities: ["has-ios-device"]
-#    timeout_in_minutes: 30
-#    flaky: true
+  microbenchmarks_ios:
+    description: >
+      Runs benchmarks from dev/benchmarks/microbenchmarks on iOS.
+    stage: devicelab_ios
+    required_agent_capabilities: ["has-ios-device"]
+    timeout_in_minutes: 30
+    flaky: true
 
 #  flutter_view_ios__start_up:
 #    description: >
@@ -229,6 +265,12 @@ tasks:
     required_agent_capabilities: ["has-ios-device"]
 
   # Tests running on Windows host
+
+  flavors_test_win:
+    description: >
+      Checks that flavored builds work on Windows.
+    stage: devicelab_win
+    required_agent_capabilities: ["windows"]
 
   channels_integration_test_win:
     description: >
@@ -276,6 +318,13 @@ tasks:
     stage: devicelab
     required_agent_capabilities: ["linux/android"]
 
+  flutter_gallery__preview_dart_2_build:
+    description: >
+      Collects various performance metrics from AOT builds of the Flutter
+      Gallery under --preview-dart-2 that enables new Dart 2.0 frontend.
+    stage: devicelab
+    required_agent_capabilities: ["linux/android"]
+
   flutter_gallery__start_up:
     description: >
       Measures the startup time of the Flutter Gallery app on Android.
@@ -295,7 +344,6 @@ tasks:
       with semantics enabled.
     stage: devicelab
     required_agent_capabilities: ["linux/android"]
-    flaky: true
 
   flutter_gallery__memory_nav:
     description: >

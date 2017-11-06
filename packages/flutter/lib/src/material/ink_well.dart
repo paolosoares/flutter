@@ -71,7 +71,7 @@ import 'theme.dart';
 /// ```dart
 /// assert(debugCheckHasMaterial(context));
 /// ```
-/// The parameter [enableFeedback] must not be `null`.
+/// The parameter [enableFeedback] must not be null.
 ///
 /// See also:
 ///
@@ -165,7 +165,7 @@ class InkResponse extends StatefulWidget {
   final BorderRadius borderRadius;
 
   /// The highlight color of the ink response. If this property is null then the
-  /// highlight color of the theme will be used.
+  /// highlight color of the theme, [ThemeData.highlightColor], will be used.
   ///
   /// See also:
   ///
@@ -174,7 +174,7 @@ class InkResponse extends StatefulWidget {
   final Color highlightColor;
 
   /// The splash color of the ink response. If this property is null then the
-  /// splash color of the theme will be used.
+  /// splash color of the theme, [ThemeData.splashColor], will be used.
   ///
   /// See also:
   ///
@@ -222,7 +222,7 @@ class InkResponse extends StatefulWidget {
   _InkResponseState<InkResponse> createState() => new _InkResponseState<InkResponse>();
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     final List<String> gestures = <String>[];
     if (onTap != null)
@@ -231,10 +231,8 @@ class InkResponse extends StatefulWidget {
       gestures.add('double tap');
     if (onLongPress != null)
       gestures.add('long press');
-    if (gestures.isEmpty)
-      gestures.add('<none>');
-    description.add(new IterableProperty<String>('gestures', gestures));
-    description.add(new DiagnosticsProperty<bool>('containedInkWell', containedInkWell, hidden: true));
+    description.add(new IterableProperty<String>('gestures', gestures, ifEmpty: '<none>'));
+    description.add(new DiagnosticsProperty<bool>('containedInkWell', containedInkWell, level: DiagnosticLevel.fine));
     description.add(new DiagnosticsProperty<BoxShape>(
       'highlightShape',
       highlightShape,
@@ -265,11 +263,7 @@ class _InkResponseState<T extends InkResponse> extends State<T> with AutomaticKe
           shape: widget.highlightShape,
           borderRadius: widget.borderRadius,
           rectCallback: widget.getRectCallback(referenceBox),
-          onRemoved: () {
-            assert(_lastHighlight != null);
-            _lastHighlight = null;
-            updateKeepAlive();
-          },
+          onRemoved: _handleInkHighlightRemoval,
         );
         updateKeepAlive();
       } else {
@@ -281,6 +275,12 @@ class _InkResponseState<T extends InkResponse> extends State<T> with AutomaticKe
     assert(value == (_lastHighlight != null && _lastHighlight.active));
     if (widget.onHighlightChanged != null)
       widget.onHighlightChanged(value);
+  }
+
+  void _handleInkHighlightRemoval() {
+    assert(_lastHighlight != null);
+    _lastHighlight = null;
+    updateKeepAlive();
   }
 
   void _handleTapDown(TapDownDetails details) {

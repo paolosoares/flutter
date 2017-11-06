@@ -35,6 +35,8 @@ class BuildApkCommand extends BuildSubCommand {
   BuildApkCommand() {
     usesTargetOption();
     addBuildModeFlags();
+    argParser.addFlag('preview-dart-2', negatable: false);
+    usesFlavorOption();
     usesPubOption();
   }
 
@@ -50,16 +52,13 @@ class BuildApkCommand extends BuildSubCommand {
   @override
   Future<Null> runCommand() async {
     await super.runCommand();
-
-    final BuildMode buildMode = getBuildMode();
-    await buildApk(buildMode: buildMode, target: targetFile);
+    await buildApk(buildInfo: getBuildInfo(), target: targetFile);
   }
 }
 
 Future<Null> buildApk({
   String target,
-  BuildMode buildMode: BuildMode.debug,
-  String kernelPath,
+  BuildInfo buildInfo: BuildInfo.debug
 }) async {
   if (!isProjectUsingGradle()) {
     throwToolExit(
@@ -80,5 +79,5 @@ Future<Null> buildApk({
     throwToolExit('Try re-installing or updating your Android SDK.');
   }
 
-  return buildGradleProject(buildMode, target, kernelPath);
+  return buildGradleProject(buildInfo, target);
 }

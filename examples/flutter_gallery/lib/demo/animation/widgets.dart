@@ -25,8 +25,8 @@ class SectionCard extends StatelessWidget {
         decoration: new BoxDecoration(
           borderRadius: new BorderRadius.circular(4.0),
           gradient: new LinearGradient(
-            begin: FractionalOffset.topLeft,
-            end: FractionalOffset.topRight,
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
             colors: <Color>[
               section.leftColor,
               section.rightColor,
@@ -35,6 +35,7 @@ class SectionCard extends StatelessWidget {
         ),
         child: new Image.asset(
           section.backgroundAsset,
+          package: section.backgroundAssetPackage,
           color: const Color.fromRGBO(255, 255, 255, 0.075),
           colorBlendMode: BlendMode.modulate,
           fit: BoxFit.cover,
@@ -81,7 +82,7 @@ class SectionTitle extends StatelessWidget {
         opacity: opacity,
         child: new Transform(
           transform: new Matrix4.identity()..scale(scale),
-          alignment: FractionalOffset.center,
+          alignment: Alignment.center,
           child: new Stack(
             children: <Widget>[
               new Positioned(
@@ -130,9 +131,12 @@ class SectionDetailView extends StatelessWidget {
       decoration: new BoxDecoration(
         borderRadius: new BorderRadius.circular(6.0),
         image: new DecorationImage(
-          image: new AssetImage(detail.imageAsset),
+          image: new AssetImage(
+            detail.imageAsset,
+            package: detail.imageAssetPackage,
+          ),
           fit: BoxFit.cover,
-          alignment: FractionalOffset.center,
+          alignment: Alignment.center,
         ),
       ),
     );

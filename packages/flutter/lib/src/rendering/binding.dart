@@ -9,12 +9,12 @@ import 'dart:ui' as ui show window;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import 'box.dart';
 import 'debug.dart';
 import 'object.dart';
-import 'semantics.dart';
 import 'view.dart';
 
 export 'package:flutter/gestures.dart' show HitTestResult;
@@ -36,6 +36,7 @@ abstract class RendererBinding extends BindingBase with SchedulerBinding, Servic
     );
     ui.window
       ..onMetricsChanged = handleMetricsChanged
+      ..onTextScaleFactorChanged = handleTextScaleFactorChanged
       ..onSemanticsEnabledChanged = _handleSemanticsEnabledChanged
       ..onSemanticsAction = _handleSemanticsAction;
     initRenderView();
@@ -86,7 +87,7 @@ abstract class RendererBinding extends BindingBase with SchedulerBinding, Servic
           }
       );
       return true;
-    });
+    }());
 
     registerSignalServiceExtension(
       name: 'debugDumpRenderTree',
@@ -99,8 +100,13 @@ abstract class RendererBinding extends BindingBase with SchedulerBinding, Servic
     );
 
     registerSignalServiceExtension(
-      name: 'debugDumpSemanticsTree',
-      callback: () { debugDumpSemanticsTree(); return debugPrintDone; }
+      name: 'debugDumpSemanticsTreeInTraversalOrder',
+      callback: () { debugDumpSemanticsTree(DebugSemanticsDumpOrder.traversal); return debugPrintDone; }
+    );
+
+    registerSignalServiceExtension(
+        name: 'debugDumpSemanticsTreeInInverseHitTestOrder',
+        callback: () { debugDumpSemanticsTree(DebugSemanticsDumpOrder.inverseHitTest); return debugPrintDone; }
     );
   }
 
@@ -137,6 +143,11 @@ abstract class RendererBinding extends BindingBase with SchedulerBinding, Servic
     assert(renderView != null);
     renderView.configuration = createViewConfiguration();
   }
+
+  /// Called when the platform text scale factor changes.
+  ///
+  /// See [Window.onTextScaleFactorChanged].
+  void handleTextScaleFactorChanged() { }
 
   /// Returns a [ViewConfiguration] configured for the [RenderView] based on the
   /// current environment.
@@ -276,9 +287,9 @@ abstract class RendererBinding extends BindingBase with SchedulerBinding, Servic
   }
 
   @override
-  Future<Null> reassembleApplication() async {
-    await super.reassembleApplication();
-    Timeline.startSync('Dirty Render Tree');
+  Future<Null> performReassemble() async {
+    await super.performReassemble();
+    Timeline.startSync('Dirty Render Tree', arguments: timelineWhitelistArguments);
     try {
       renderView.reassemble();
     } finally {
@@ -319,9 +330,12 @@ void debugDumpLayerTree() {
 
 /// Prints a textual representation of the entire semantics tree.
 /// This will only work if there is a semantics client attached.
-/// Otherwise, the tree is empty and this will print "null".
-void debugDumpSemanticsTree() {
-  debugPrint(RendererBinding.instance?.renderView?.debugSemantics?.toStringDeep() ?? 'Semantics not collected.');
+/// Otherwise, a notice that no semantics are available will be printed.
+///
+/// The order in which the children of a [SemanticsNode] will be printed is
+/// controlled by the [childOrder] parameter.
+void debugDumpSemanticsTree(DebugSemanticsDumpOrder childOrder) {
+  debugPrint(RendererBinding.instance?.renderView?.debugSemantics?.toStringDeep(childOrder: childOrder) ?? 'Semantics not collected.');
 }
 
 /// A concrete binding for applications that use the Rendering framework

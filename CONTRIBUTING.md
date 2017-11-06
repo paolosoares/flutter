@@ -71,16 +71,16 @@ own code by mimicking the `pubspec.yaml` files in the `examples` subdirectories.
 Running the analyzer
 --------------------
 
-When editing Flutter code, it's important to check the code with the analyzer. There are two
-main ways to run it. In either case you will want to run `flutter update-packages --upgrade`
-first, or you will get version conflict issues or bogus error messages about core clases like
-Offset from `dart:ui`.
+When editing Flutter code, it's important to check the code with the
+analyzer. There are two main ways to run it. In either case you will
+want to run `flutter update-packages` first, or you will get bogus
+error messages about core classes like Offset from `dart:ui`.
 
-For a one-off, use `flutter analyze --flutter-repo`. This uses the `.analysis_options_repo` file
+For a one-off, use `flutter analyze --flutter-repo`. This uses the `analysis_options_repo.yaml` file
 at the root of the repository for its configuration.
 
 For continuous analysis, use `flutter analyze --flutter-repo --watch`. This uses normal
-`.analysis_options` files, and they can differ from package to package.
+`analysis_options.yaml` files, and they can differ from package to package.
 
 If you want to see how many members are missing dartdocs, you should use the first option,
 providing the additional command `--dartdocs`.
@@ -125,10 +125,13 @@ test should have a `main` function and use the `test` package.
 Working with flutter tools
 --------------------------
 
-The flutter tools itself is built when you run `flutter` for the first time and each time
+The flutter tool itself is built when you run `flutter` for the first time and each time
 you run `flutter upgrade`. If you want to alter and re-test the tool's behavior itself,
 locally commit your tool changes in git and the tool will be rebuilt from Dart sources
 in `packages/flutter_tools` the next time you run `flutter`.
+
+Alternatively, delete the `bin/cache/flutter_tools.snapshot` file. Doing so will
+force a rebuild of the tool from your local sources the next time you run `flutter`.
 
 flutter_tools' tests run inside the Dart command line VM rather than in the
 flutter shell. To run the test:
@@ -186,8 +189,8 @@ organization's) name and contact info to the [AUTHORS](AUTHORS) file.
 We grant commit access to people who have gained our trust and demonstrated
 a commitment to Flutter.
 
-Tools for tracking an improving test coverage
----------------------------------------------
+Tools for tracking and improving test coverage
+----------------------------------------------
 
 We strive for a high degree of test coverage for the Flutter framework. We use
 Coveralls to [track our test coverage](https://coveralls.io/github/flutter/flutter?branch=master).
@@ -240,6 +243,11 @@ the following steps.
 3. To run tests on your host machine, build one of the host configurations
    (e.g., `out/host_debug_unopt`). To run examples on Android, build one of the
    Android configurations (e.g., `out/android_debug_unopt`).
+   When running on the device with `--preview-dart-2` flag you will still need
+   to build corresponding host configuration (e.g., `out/host_debug_unopt` if you
+   are using `out/android_debug_unopt`, `out/host_release` if you use `out/android_release`).
+   Host configuration provides standalone dart sdk for the engine, that is used
+   to run engine dart scripts on the host.
 
 You should now be able to run the tests against your locally built
 engine using the `flutter test --local-engine=host_debug_unopt` command. To run

@@ -47,7 +47,7 @@ class TestFocusableState extends State<TestFocusable> {
       child: new AnimatedBuilder(
         animation: focusNode,
         builder: (BuildContext context, Widget child) {
-          return new Text(focusNode.hasFocus ? widget.yes : widget.no);
+          return new Text(focusNode.hasFocus ? widget.yes : widget.no, textDirection: TextDirection.ltr);
         },
       ),
     );
@@ -145,6 +145,7 @@ void main() {
         node: parentFocusScope,
         autofocus: true,
         child: new Row(
+          textDirection: TextDirection.ltr,
           children: <Widget>[
             const TestFocusable(
               no: 'a',
@@ -169,7 +170,7 @@ void main() {
 
     expect(parentFocusScope, hasAGoodToStringDeep);
     expect(
-      parentFocusScope.toStringDeep(),
+      parentFocusScope.toStringDeep(minLevel: DiagnosticLevel.info),
       equalsIgnoringHashCodes(
           'FocusScopeNode#00000\n'
           '   focus: FocusNode#00000(FOCUSED)\n'
@@ -178,7 +179,7 @@ void main() {
 
     expect(WidgetsBinding.instance.focusManager.rootScope, hasAGoodToStringDeep);
     expect(
-      WidgetsBinding.instance.focusManager.rootScope.toStringDeep(),
+      WidgetsBinding.instance.focusManager.rootScope.toStringDeep(minLevel: DiagnosticLevel.info),
       equalsIgnoringHashCodes(
         'FocusScopeNode#00000\n'
         ' └─child 1: FocusScopeNode#00000\n'
@@ -193,6 +194,7 @@ void main() {
       new FocusScope(
         node: parentFocusScope,
         child: new Row(
+          textDirection: TextDirection.ltr,
           children: <Widget>[
             const TestFocusable(
               no: 'a',
@@ -218,6 +220,7 @@ void main() {
       new FocusScope(
         node: parentFocusScope,
         child: new Row(
+          textDirection: TextDirection.ltr,
           children: <Widget>[
             const TestFocusable(
               no: 'a',

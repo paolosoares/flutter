@@ -23,6 +23,7 @@ abstract class RunCommandBase extends FlutterCommand {
   // Used by run and drive commands.
   RunCommandBase() {
     addBuildModeFlags(defaultToRelease: false);
+    usesFlavorOption();
     argParser.addFlag('trace-startup',
         negatable: true,
         defaultsTo: false,
@@ -43,11 +44,6 @@ abstract class RunCommandBase extends FlutterCommand {
               'Specifying port 0 will find a random free port.\n'
               'Defaults to the first available port after $kDefaultObservatoryPort.'
     );
-    argParser.addOption('diagnostic-port',
-        help: 'Listen to the given port for a diagnostic connection.\n'
-              'Specifying port 0 will find a random free port.\n'
-              'Defaults to the first available port after $kDefaultDiagnosticPort.'
-    );
   }
 
   int get observatoryPort {
@@ -56,17 +52,6 @@ abstract class RunCommandBase extends FlutterCommand {
         return int.parse(argResults['observatory-port']);
       } catch (error) {
         throwToolExit('Invalid port for `--observatory-port`: $error');
-      }
-    }
-    return null;
-  }
-
-  int get diagnosticPort {
-    if (argResults['diagnostic-port'] != null) {
-      try {
-        return int.parse(argResults['diagnostic-port']);
-      } catch (error) {
-        throwToolExit('Invalid port for `--diagnostic-port`: $error');
       }
     }
     return null;
@@ -81,6 +66,8 @@ class RunCommand extends RunCommandBase {
   final String description = 'Run your Flutter app on an attached device.';
 
   RunCommand({ bool verboseHelp: false }) {
+    requiresPubspecYaml();
+
     argParser.addFlag('full-restart',
         defaultsTo: true,
         help: 'Stop any currently running application process before running the app.');
@@ -95,6 +82,11 @@ class RunCommand extends RunCommandBase {
               'when testing Flutter on emulators. By default, Flutter will\n'
               'attempt to either use OpenGL or Vulkan and fall back to software\n'
               'when neither is available.');
+    argParser.addFlag('trace-skia',
+        defaultsTo: false,
+        negatable: false,
+        help: 'Enable tracing of Skia code. This is useful when debugging\n'
+              'the GPU thread. By default, Flutter will not log skia code.');
     argParser.addFlag('use-test-fonts',
         negatable: true,
         defaultsTo: false,
@@ -109,11 +101,10 @@ class RunCommand extends RunCommandBase {
     argParser.addOption('use-application-binary',
         hide: !verboseHelp,
         help: 'Specify a pre-built application binary to use when running.');
-    argParser.addOption('kernel',
+    argParser.addFlag('preview-dart-2',
         hide: !verboseHelp,
-        help: 'Path to a pre-built kernel blob to use when running.\n'
-              'This option only exists for testing new kernel code execution on devices\n'
-              'and is not needed during normal application development.');
+        defaultsTo: false,
+        help: 'Preview Dart 2.0 functionality.');
     argParser.addOption('packages',
         hide: !verboseHelp,
         help: 'Specify the path to the .packages file.');
@@ -149,12 +140,8 @@ class RunCommand extends RunCommandBase {
             'results out to "refresh_benchmark.json", and exit. This flag is\n'
             'intended for use in generating automated flutter benchmarks.');
 
-    commandValidator = () {
-      // When running with a prebuilt application, no command validation is
-      // necessary.
-      if (!runningWithPrebuiltApplication)
-        commonCommandValidator();
-    };
+    argParser.addOption(FlutterOptions.kExtraFrontEndOptions, hide: true);
+    argParser.addOption(FlutterOptions.kExtraGenSnapshotOptions, hide: true);
   }
 
   List<Device> devices;
@@ -176,7 +163,7 @@ class RunCommand extends RunCommandBase {
   @override
   Future<Map<String, String>> get usageValues async {
     final bool isEmulator = await devices[0].isLocalEmulator;
-    final String deviceType = devices.length == 1 
+    final String deviceType = devices.length == 1
             ? getNameForTargetPlatform(await devices[0].targetPlatform)
             : 'multiple';
 
@@ -208,7 +195,7 @@ class RunCommand extends RunCommandBase {
   bool shouldUseHotMode() {
     final bool hotArg = argResults['hot'] ?? false;
     final bool shouldUseHotMode = hotArg;
-    return (getBuildMode() == BuildMode.debug) && shouldUseHotMode;
+    return getBuildInfo().isDebug && shouldUseHotMode;
   }
 
   bool get runningWithPrebuiltApplication =>
@@ -217,27 +204,30 @@ class RunCommand extends RunCommandBase {
   bool get stayResident => argResults['resident'];
 
   @override
-  Future<FlutterCommandResult> verifyThenRunCommand() async {
-    commandValidator();
+  Future<Null> validateCommand() async {
+    // When running with a prebuilt application, no command validation is
+    // necessary.
+    if (!runningWithPrebuiltApplication)
+      await super.validateCommand();
     devices = await findAllTargetDevices();
     if (devices == null)
       throwToolExit(null);
     if (deviceManager.hasSpecifiedAllDevices && runningWithPrebuiltApplication)
       throwToolExit('Using -d all with --use-application-binary is not supported');
-    return super.verifyThenRunCommand();
   }
 
   DebuggingOptions _createDebuggingOptions() {
-    if (getBuildMode() == BuildMode.release) {
-      return new DebuggingOptions.disabled(getBuildMode());
+    final BuildInfo buildInfo = getBuildInfo();
+    if (buildInfo.isRelease) {
+      return new DebuggingOptions.disabled(buildInfo);
     } else {
       return new DebuggingOptions.enabled(
-        getBuildMode(),
+        buildInfo,
         startPaused: argResults['start-paused'],
         useTestFonts: argResults['use-test-fonts'],
         enableSoftwareRendering: argResults['enable-software-rendering'],
+        traceSkia: argResults['trace-skia'],
         observatoryPort: observatoryPort,
-        diagnosticPort: diagnosticPort,
       );
     }
   }
@@ -298,7 +288,7 @@ class RunCommand extends RunCommandBase {
     }
 
     final List<FlutterDevice> flutterDevices = devices.map((Device device) {
-      return new FlutterDevice(device);
+      return new FlutterDevice(device, previewDart2: argResults['preview-dart-2']);
     }).toList();
 
     ResidentRunner runner;
@@ -309,7 +299,7 @@ class RunCommand extends RunCommandBase {
         debuggingOptions: _createDebuggingOptions(),
         benchmarkMode: argResults['benchmark'],
         applicationBinary: argResults['use-application-binary'],
-        kernelFilePath: argResults['kernel'],
+        previewDart2: argResults['preview-dart-2'],
         projectRootPath: argResults['project-root'],
         packagesFilePath: argResults['packages'],
         projectAssets: argResults['project-assets'],
@@ -322,6 +312,7 @@ class RunCommand extends RunCommandBase {
         debuggingOptions: _createDebuggingOptions(),
         traceStartup: traceStartup,
         applicationBinary: argResults['use-application-binary'],
+        previewDart2: argResults['preview-dart-2'],
         stayResident: stayResident,
       );
     }
@@ -332,7 +323,8 @@ class RunCommand extends RunCommandBase {
     //
     // Do not add more operations to the future.
     final Completer<Null> appStartedTimeRecorder = new Completer<Null>.sync();
-    appStartedTimeRecorder.future.then(
+    // This callback can't throw.
+    appStartedTimeRecorder.future.then( // ignore: unawaited_futures
       (_) { appStartedTime = clock.now(); }
     );
 

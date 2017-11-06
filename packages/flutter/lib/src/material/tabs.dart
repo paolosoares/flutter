@@ -34,23 +34,35 @@ const double _kMaxTabWidth = 264.0;
 ///  * [TabController], which coordinates tab selection between a [TabBar] and a [TabBarView].
 ///  * <https://material.google.com/components/tabs.html>
 class Tab extends StatelessWidget {
-  /// Creates a material design [TabBar] tab. At least one of [text] and [icon]
-  /// must be non-null.
+  /// Creates a material design [TabBar] tab. At least one of [text], [icon],
+  /// and [child] must be non-null. The [text] and [child] arguments must not be
+  /// used at the same time.
   const Tab({
     Key key,
     this.text,
     this.icon,
-  }) : assert(text != null || icon != null),
+    this.child,
+  }) : assert(text != null || child != null || icon != null),
+       assert(!(text != null && null != child)), // TODO(goderbauer): https://github.com/dart-lang/sdk/issues/31140
        super(key: key);
 
   /// The text to display as the tab's label.
+  ///
+  /// Must not be used in combination with [child].
   final String text;
+
+  /// The widget to be used as the tab's label.
+  ///
+  /// Usually a [Text] widget, possibly wrapped in a [Semantics] widget.
+  ///
+  /// Must not be used in combination with [text].
+  final Widget child;
 
   /// An icon to display as the tab's label.
   final Widget icon;
 
   Widget _buildLabelText() {
-    return new Text(text, softWrap: false, overflow: TextOverflow.fade);
+    return child ?? new Text(text, softWrap: false, overflow: TextOverflow.fade);
   }
 
   @override
@@ -89,7 +101,7 @@ class Tab extends StatelessWidget {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new StringProperty('text', text, defaultValue: null));
     description.add(new DiagnosticsProperty<Widget>('icon', icon, defaultValue: null));
@@ -150,6 +162,8 @@ class _TabLabelBarRenderer extends RenderFlex {
     MainAxisSize mainAxisSize,
     MainAxisAlignment mainAxisAlignment,
     CrossAxisAlignment crossAxisAlignment,
+    TextDirection textDirection,
+    VerticalDirection verticalDirection,
     TextBaseline textBaseline,
     @required this.onPerformLayout,
   }) : assert(onPerformLayout != null),
@@ -159,6 +173,8 @@ class _TabLabelBarRenderer extends RenderFlex {
          mainAxisSize: mainAxisSize,
          mainAxisAlignment: mainAxisAlignment,
          crossAxisAlignment: crossAxisAlignment,
+         textDirection: textDirection,
+         verticalDirection: verticalDirection,
          textBaseline: textBaseline,
        );
 
@@ -188,6 +204,8 @@ class _TabLabelBar extends Flex {
     Key key,
     MainAxisAlignment mainAxisAlignment,
     CrossAxisAlignment crossAxisAlignment,
+    TextDirection textDirection,
+    VerticalDirection verticalDirection: VerticalDirection.down,
     List<Widget> children: const <Widget>[],
     this.onPerformLayout,
   }) : super(
@@ -197,6 +215,8 @@ class _TabLabelBar extends Flex {
     mainAxisSize: MainAxisSize.max,
     mainAxisAlignment: MainAxisAlignment.start,
     crossAxisAlignment: CrossAxisAlignment.center,
+    textDirection: textDirection,
+    verticalDirection: verticalDirection,
   );
 
   final ValueChanged<List<double>> onPerformLayout;
@@ -208,6 +228,8 @@ class _TabLabelBar extends Flex {
       mainAxisAlignment: mainAxisAlignment,
       mainAxisSize: mainAxisSize,
       crossAxisAlignment: crossAxisAlignment,
+      textDirection: getEffectiveTextDirection(context),
+      verticalDirection: verticalDirection,
       textBaseline: textBaseline,
       onPerformLayout: onPerformLayout,
     );
@@ -293,7 +315,7 @@ class _IndicatorPainter extends CustomPainter {
 
   static bool _tabOffsetsNotEqual(List<double> a, List<double> b) {
     assert(a != null && b != null && a.length == b.length);
-    for(int i = 0; i < a.length; i++) {
+    for (int i = 0; i < a.length; i += 1) {
       if (a[i] != b[i])
         return true;
     }
@@ -402,16 +424,16 @@ class _TabBarScrollController extends ScrollController {
 class TabBar extends StatefulWidget implements PreferredSizeWidget {
   /// Creates a material design tab bar.
   ///
-  /// The [tabs] argument cannot be null and its length must match the [controller]'s
+  /// The [tabs] argument must not be null and its length must match the [controller]'s
   /// [TabController.length].
   ///
   /// If a [TabController] is not provided, then there must be a
   /// [DefaultTabController] ancestor.
   ///
-  /// The [indicatorWeight] parameter defaults to 2, and cannot be null.
+  /// The [indicatorWeight] parameter defaults to 2, and must not be null.
   ///
-  /// The [indicatorPadding] parameter defaults to [EdgeInsets.zero], and cannot be null.
-  TabBar({
+  /// The [indicatorPadding] parameter defaults to [EdgeInsets.zero], and must not be null.
+  const TabBar({
     Key key,
     @required this.tabs,
     this.controller,
@@ -536,7 +558,7 @@ class _TabBarState extends State<TabBar> {
         );
       }
       return true;
-    });
+    }());
     if (newController == _controller)
       return;
 
@@ -732,19 +754,20 @@ class _TabBarState extends State<TabBar> {
     // reflect the intrinsic width of their labels.
     final int tabCount = widget.tabs.length;
     for (int index = 0; index < tabCount; index++) {
-      wrappedTabs[index] = new MergeSemantics(
-        child: new Stack(
-          children: <Widget>[
-            new InkWell(
-              onTap: () { _handleTap(index); },
-              child: wrappedTabs[index],
-            ),
-            new Semantics(
-              selected: index == _currentIndex,
-              // TODO(goderbauer): I10N-ify
-              label: 'Tab ${index + 1} of $tabCount',
-            ),
-          ],
+      wrappedTabs[index] = new InkWell(
+        onTap: () { _handleTap(index); },
+        child: new Padding(
+          padding: new EdgeInsets.only(bottom: widget.indicatorWeight),
+          child: new Stack(
+            children: <Widget>[
+              wrappedTabs[index],
+              new Semantics(
+                selected: index == _currentIndex,
+                // TODO(goderbauer): I10N-ify
+                label: 'Tab ${index + 1} of $tabCount',
+              ),
+            ]
+          ),
         ),
       );
       if (!widget.isScrollable)
@@ -753,9 +776,7 @@ class _TabBarState extends State<TabBar> {
 
     Widget tabBar = new CustomPaint(
       painter: _indicatorPainter,
-      child: new Padding(
-        padding: new EdgeInsets.only(bottom: widget.indicatorWeight),
-        child: new _TabStyle(
+      child: new _TabStyle(
           animation: kAlwaysDismissedAnimation,
           selected: false,
           labelColor: widget.labelColor,
@@ -767,7 +788,6 @@ class _TabBarState extends State<TabBar> {
             children:  wrappedTabs,
           ),
         ),
-      ),
     );
 
     if (widget.isScrollable) {
@@ -784,7 +804,7 @@ class _TabBarState extends State<TabBar> {
 }
 
 /// A page view that displays the widget which corresponds to the currently
-/// selected tab. Typically used in conjuction with a [TabBar].
+/// selected tab. Typically used in conjunction with a [TabBar].
 ///
 /// If a [TabController] is not provided, then there must be a [DefaultTabController]
 /// ancestor.
@@ -792,7 +812,7 @@ class TabBarView extends StatefulWidget {
   /// Creates a page view with one child per tab.
   ///
   /// The length of [children] must be the same as the [controller]'s length.
-  TabBarView({
+  const TabBarView({
     Key key,
     @required this.children,
     this.controller,
@@ -845,7 +865,7 @@ class _TabBarViewState extends State<TabBarView> {
         );
       }
       return true;
-    });
+    }());
     if (newController == _controller)
       return;
 
@@ -980,7 +1000,7 @@ class _TabBarViewState extends State<TabBarView> {
 class TabPageSelectorIndicator extends StatelessWidget {
   /// Creates an indicator used by [TabPageSelector].
   ///
-  /// The [backgroundColor], [borderColor], and [size] parameters cannot be null.
+  /// The [backgroundColor], [borderColor], and [size] parameters must not be null.
   const TabPageSelectorIndicator({
     Key key,
     @required this.backgroundColor,
@@ -1103,7 +1123,7 @@ class TabPageSelector extends StatelessWidget {
         );
       }
       return true;
-    });
+    }());
     final Animation<double> animation = new CurvedAnimation(
       parent: tabController.animation,
       curve: Curves.fastOutSlowIn,

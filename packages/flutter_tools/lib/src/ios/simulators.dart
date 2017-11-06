@@ -237,7 +237,7 @@ class IOSSimulator extends Device {
   Future<bool> installApp(ApplicationPackage app) async {
     try {
       final IOSApp iosApp = app;
-      SimControl.instance.install(id, iosApp.simulatorBundlePath);
+      await SimControl.instance.install(id, iosApp.simulatorBundlePath);
       return true;
     } catch (e) {
       return false;
@@ -306,13 +306,12 @@ class IOSSimulator extends Device {
 
   @override
   Future<LaunchResult> startApp(
-    ApplicationPackage app,
-    BuildMode mode, {
+    ApplicationPackage app, {
     String mainPath,
     String route,
     DebuggingOptions debuggingOptions,
     Map<String, dynamic> platformArgs,
-    String kernelPath,
+    bool previewDart2: false,
     bool prebuiltApplication: false,
     bool applicationNeedsRebuild: false,
     bool usesTerminalUi: true,
@@ -321,7 +320,7 @@ class IOSSimulator extends Device {
       printTrace('Building ${app.name} for $id.');
 
       try {
-        await _setupUpdatedApplicationBundle(app);
+        await _setupUpdatedApplicationBundle(app, debuggingOptions.buildInfo.flavor);
       } on ToolExit catch (e) {
         printError(e.message);
         return new LaunchResult.failed();
@@ -343,7 +342,7 @@ class IOSSimulator extends Device {
     }
 
     if (debuggingOptions.debuggingEnabled) {
-      if (debuggingOptions.buildMode == BuildMode.debug)
+      if (debuggingOptions.buildInfo.isDebug)
         args.add('--enable-checked-mode');
       if (debuggingOptions.startPaused)
         args.add('--start-paused');
@@ -352,8 +351,6 @@ class IOSSimulator extends Device {
 
       final int observatoryPort = await debuggingOptions.findBestObservatoryPort();
       args.add('--observatory-port=$observatoryPort');
-      final int diagnosticPort = await debuggingOptions.findBestDiagnosticPort();
-      args.add('--diagnostic-port=$diagnosticPort');
     }
 
     ProtocolDiscovery observatoryDiscovery;
@@ -383,7 +380,7 @@ class IOSSimulator extends Device {
       printError('Error waiting for a debug connection: $error');
       return new LaunchResult.failed();
     } finally {
-      observatoryDiscovery.cancel();
+      await observatoryDiscovery.cancel();
     }
   }
 
@@ -395,17 +392,17 @@ class IOSSimulator extends Device {
     return criteria.reduce((bool a, bool b) => a && b);
   }
 
-  Future<Null> _setupUpdatedApplicationBundle(ApplicationPackage app) async {
+  Future<Null> _setupUpdatedApplicationBundle(ApplicationPackage app, String flavor) async {
     await _sideloadUpdatedAssetsForInstalledApplicationBundle(app);
 
     if (!await _applicationIsInstalledAndRunning(app))
-      return _buildAndInstallApplicationBundle(app);
+      return _buildAndInstallApplicationBundle(app, flavor);
   }
 
-  Future<Null> _buildAndInstallApplicationBundle(ApplicationPackage app) async {
+  Future<Null> _buildAndInstallApplicationBundle(ApplicationPackage app, String flavor) async {
     // Step 1: Build the Xcode project.
     // The build mode for the simulator is always debug.
-    final XcodeBuildResult buildResult = await buildXcodeProject(app: app, mode: BuildMode.debug, buildForDevice: false);
+    final XcodeBuildResult buildResult = await buildXcodeProject(app: app, buildInfo: new BuildInfo(BuildMode.debug, flavor), buildForDevice: false);
     if (!buildResult.success)
       throwToolExit('Could not build the application for the simulator.');
 
@@ -451,6 +448,7 @@ class IOSSimulator extends Device {
 
   @override
   DeviceLogReader getLogReader({ApplicationPackage app}) {
+    assert(app is IOSApp);
     _logReaders ??= <ApplicationPackage, _IOSSimulatorLogReader>{};
     return _logReaders.putIfAbsent(app, () => new _IOSSimulatorLogReader(this, app));
   }
@@ -487,10 +485,40 @@ class IOSSimulator extends Device {
   }
 }
 
+final RegExp _iosSdkRegExp = new RegExp(r'iOS (\d+)');
+
+/// Launches the device log reader process on the host.
+Future<Process> launchDeviceLogTool(IOSSimulator device) async {
+  final Match sdkMatch = _iosSdkRegExp.firstMatch(await device.sdkNameAndVersion);
+  final int majorVersion = int.parse(sdkMatch.group(1) ?? 11);
+
+  // Versions of iOS prior to iOS 11 log to the simulator syslog file.
+  if (majorVersion < 11)
+    return runCommand(<String>['tail', '-n', '0', '-F', device.logFilePath]);
+
+  // For iOS 11 and above, use /usr/bin/log to tail process logs.
+  // Run in interactive mode (via script), otherwise /usr/bin/log buffers in 4k chunks. (radar: 34420207)
+  return runCommand(<String>[
+    'script', '/dev/null', '/usr/bin/log', 'stream', '--style', 'syslog', '--predicate', 'processImagePath CONTAINS "${device.id}"',
+  ]);
+}
+
+Future<Process> launchSystemLogTool(IOSSimulator device) async {
+  final Match sdkMatch = _iosSdkRegExp.firstMatch(await device.sdkNameAndVersion);
+  final int majorVersion = int.parse(sdkMatch.group(1) ?? 11);
+
+  // Versions of iOS prior to 11 tail the simulator syslog file.
+  if (majorVersion < 11)
+    return runCommand(<String>['tail', '-n', '0', '-F', '/private/var/log/system.log']);
+
+  // For iOS 11 and later, all relevant detail is in the device log.
+  return null;
+}
+
 class _IOSSimulatorLogReader extends DeviceLogReader {
   String _appName;
 
-  _IOSSimulatorLogReader(this.device, ApplicationPackage app) {
+  _IOSSimulatorLogReader(this.device, IOSApp app) {
     _linesController = new StreamController<String>.broadcast(
       onListen: _start,
       onCancel: _stop
@@ -515,25 +543,30 @@ class _IOSSimulatorLogReader extends DeviceLogReader {
   Future<Null> _start() async {
     // Device log.
     device.ensureLogsExists();
-    _deviceProcess = await runCommand(<String>['tail', '-n', '0', '-F', device.logFilePath]);
+    _deviceProcess = await launchDeviceLogTool(device);
     _deviceProcess.stdout.transform(UTF8.decoder).transform(const LineSplitter()).listen(_onDeviceLine);
     _deviceProcess.stderr.transform(UTF8.decoder).transform(const LineSplitter()).listen(_onDeviceLine);
 
     // Track system.log crashes.
     // ReportCrash[37965]: Saved crash report for FlutterRunner[37941]...
-    _systemProcess = await runCommand(<String>['tail', '-n', '0', '-F', '/private/var/log/system.log']);
-    _systemProcess.stdout.transform(UTF8.decoder).transform(const LineSplitter()).listen(_onSystemLine);
-    _systemProcess.stderr.transform(UTF8.decoder).transform(const LineSplitter()).listen(_onSystemLine);
+    _systemProcess = await launchSystemLogTool(device);
+    if (_systemProcess != null) {
+      _systemProcess.stdout.transform(UTF8.decoder).transform(const LineSplitter()).listen(_onSystemLine);
+      _systemProcess.stderr.transform(UTF8.decoder).transform(const LineSplitter()).listen(_onSystemLine);
+    }
 
-    _deviceProcess.exitCode.whenComplete(() {
+    // We don't want to wait for the process or its callback. Best effort
+    // cleanup in the callback.
+    _deviceProcess.exitCode.whenComplete(() { // ignore: unawaited_futures
       if (_linesController.hasListener)
         _linesController.close();
     });
   }
 
   // Match the log prefix (in order to shorten it):
-  //   'Jan 29 01:31:44 devoncarew-macbookpro3 SpringBoard[96648]: ...'
-  static final RegExp _mapRegex = new RegExp(r'\S+ +\S+ +\S+ \S+ (.+)\[\d+\]\)?: (.*)$');
+  // * Xcode 8: Sep 13 15:28:51 cbracken-macpro localhost Runner[37195]: (Flutter) Observatory listening on http://127.0.0.1:57701/
+  // * Xcode 9: 2017-09-13 15:26:57.228948-0700  localhost Runner[37195]: (Flutter) Observatory listening on http://127.0.0.1:57701/
+  static final RegExp _mapRegex = new RegExp(r'\S+ +\S+ +\S+ +(\S+ +)?(\S+)\[\d+\]\)?: (\(.*\))? *(.*)$');
 
   // Jan 31 19:23:28 --- last message repeated 1 time ---
   static final RegExp _lastMessageSingleRegex = new RegExp(r'\S+ +\S+ +\S+ --- last message repeated 1 time ---$');
@@ -541,52 +574,41 @@ class _IOSSimulatorLogReader extends DeviceLogReader {
 
   static final RegExp _flutterRunnerRegex = new RegExp(r' FlutterRunner\[\d+\] ');
 
-  /// List of log categories to always show in the logs, even if this is an app-specific
-  /// [DeviceLogReader]. Add to this list to make the log output more verbose.
-  static final List<String> _whitelistedLogCategories = <String>[
-    'CoreSimulatorBridge',
-  ];
-
   String _filterDeviceLine(String string) {
     final Match match = _mapRegex.matchAsPrefix(string);
     if (match != null) {
-      final String category = match.group(1);
-      final String content = match.group(2);
+      final String category = match.group(2);
+      final String tag = match.group(3);
+      final String content = match.group(4);
+
+      // Filter out non-Flutter originated noise from the engine.
+      if (_appName != null && category != _appName)
+        return null;
+
+      if (tag != null && tag != '(Flutter)')
+        return null;
 
       // Filter out some messages that clearly aren't related to Flutter.
       if (string.contains(': could not find icon for representation -> com.apple.'))
         return null;
 
-      if (category == 'CoreSimulatorBridge'
-          && content.startsWith('Pasteboard change listener callback port'))
-        return null;
-
-      if (category == 'routined'
-          && content.startsWith('CoreLocation: Error occurred while trying to retrieve motion state update'))
-        return null;
-
-      if (category == 'syslogd' && content == 'ASL Sender Statistics')
-        return null;
-
-      // assertiond: assertion failed: 15E65 13E230: assertiond + 15801 [3C808658-78EC-3950-A264-79A64E0E463B]: 0x1
-      if (category == 'assertiond'
-          && content.startsWith('assertion failed: ')
-          && content.endsWith(']: 0x1'))
-         return null;
-
       // assertion failed: 15G1212 13E230: libxpc.dylib + 57882 [66C28065-C9DB-3C8E-926F-5A40210A6D1B]: 0x7d
-      if (category == 'Runner'
-          && content.startsWith('assertion failed: ')
-          && content.contains(' libxpc.dylib '))
+      if (content.startsWith('assertion failed: ') && content.contains(' libxpc.dylib '))
         return null;
 
-      if (_appName == null || _whitelistedLogCategories.contains(category))
+      if (_appName == null)
         return '$category: $content';
       else if (category == _appName)
         return content;
 
       return null;
     }
+
+    if (string.startsWith('Filtering the log data using '))
+      return null;
+
+    if (string.startsWith('Timestamp                       (process)[PID]'))
+      return null;
 
     if (_lastMessageSingleRegex.matchAsPrefix(string) != null)
       return null;
@@ -645,12 +667,12 @@ int compareIosVersions(String v1, String v2) {
   final List<int> v2Fragments = v2.split('.').map(int.parse).toList();
 
   int i = 0;
-  while(i < v1Fragments.length && i < v2Fragments.length) {
+  while (i < v1Fragments.length && i < v2Fragments.length) {
     final int v1Fragment = v1Fragments[i];
     final int v2Fragment = v2Fragments[i];
     if (v1Fragment != v2Fragment)
       return v1Fragment.compareTo(v2Fragment);
-    i++;
+    i += 1;
   }
   return v1Fragments.length.compareTo(v2Fragments.length);
 }
@@ -697,7 +719,7 @@ class _IOSSimulatorDevicePortForwarder extends DevicePortForwarder {
   }
 
   @override
-  Future<int> forward(int devicePort, {int hostPort: null}) async {
+  Future<int> forward(int devicePort, {int hostPort}) async {
     if ((hostPort == null) || (hostPort == 0)) {
       hostPort = devicePort;
     }

@@ -152,7 +152,8 @@ class ScaleGestureRecognizer extends OneSequenceGestureRecognizer {
     if (event is PointerMoveEvent) {
       final VelocityTracker tracker = _velocityTrackers[event.pointer];
       assert(tracker != null);
-      tracker.addPosition(event.timeStamp, event.position);
+      if (!event.synthesized)
+        tracker.addPosition(event.timeStamp, event.position);
       _pointerLocations[event.pointer] = event.position;
       shouldStartIfAccepted = true;
     } else if (event is PointerDownEvent) {
@@ -253,7 +254,7 @@ class ScaleGestureRecognizer extends OneSequenceGestureRecognizer {
 
   @override
   void didStopTrackingLastPointer(int pointer) {
-    switch(_state) {
+    switch (_state) {
       case _ScaleState.possible:
         resolve(GestureDisposition.rejected);
         break;
@@ -276,5 +277,5 @@ class ScaleGestureRecognizer extends OneSequenceGestureRecognizer {
   }
 
   @override
-  String toStringShort() => 'scale';
+  String get debugDescription => 'scale';
 }

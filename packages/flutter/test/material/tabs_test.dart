@@ -7,11 +7,21 @@ import 'dart:ui' show SemanticsFlags, SemanticsAction;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/physics.dart';
 
 import '../rendering/mock_canvas.dart';
 import '../rendering/recording_canvas.dart';
 import '../widgets/semantics_tester.dart';
+
+Widget boilerplate({ Widget child }) {
+  return new Directionality(
+    textDirection: TextDirection.ltr,
+    child: new Material(
+      child: child,
+    ),
+  );
+}
 
 class StateMarker extends StatefulWidget {
   const StateMarker({ Key key, this.child }) : super(key: key);
@@ -40,7 +50,7 @@ Widget buildFrame({
     bool isScrollable: false,
     Color indicatorColor,
   }) {
-  return new Material(
+  return boilerplate(
     child: new DefaultTabController(
       initialIndex: tabs.indexOf(value),
       length: tabs.length,
@@ -131,18 +141,18 @@ class TabIndicatorRecordingCanvas extends TestRecordingCanvas {
 
 class TestScrollPhysics extends ScrollPhysics {
   const TestScrollPhysics({ ScrollPhysics parent }) : super(parent: parent);
-  
+
   @override
   TestScrollPhysics applyTo(ScrollPhysics ancestor) {
     return new TestScrollPhysics(parent: buildParent(ancestor));
   }
-  
+
   static final SpringDescription _kDefaultSpring = new SpringDescription.withDampingRatio(
     mass: 0.5,
-    springConstant: 500.0,
+    stiffness: 500.0,
     ratio: 1.1,
   );
-  
+
   @override
   SpringDescription get spring => _kDefaultSpring;
 }
@@ -252,7 +262,7 @@ void main() {
     String value = tabs[0];
 
     Widget builder() {
-      return new Material(
+      return boilerplate(
         child: new DefaultTabController(
           initialIndex: tabs.indexOf(value),
           length: tabs.length,
@@ -434,7 +444,7 @@ void main() {
     await tester.pumpWidget(
       new MaterialApp(
         home: new Align(
-          alignment: FractionalOffset.topLeft,
+          alignment: Alignment.topLeft,
           child: new SizedBox(
             width: 300.0,
             height: 200.0,
@@ -632,7 +642,7 @@ void main() {
     Color secondColor;
 
     await tester.pumpWidget(
-      new Material(
+      boilerplate(
         child: new TabBar(
           controller: controller,
           labelColor: Colors.green[500],
@@ -666,7 +676,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      new Material(
+      boilerplate(
         child: new TabBarView(
           controller: controller,
           children: <Widget>[ const Text('First'), const Text('Second') ],
@@ -764,7 +774,7 @@ void main() {
     );
 
     Widget buildFrame() {
-      return new Material(
+      return boilerplate(
         child: new TabBar(
           key: new UniqueKey(),
           controller: controller,
@@ -792,8 +802,9 @@ void main() {
       length: 3,
     );
 
-    await tester.pumpWidget(
-      new SizedBox.expand(
+    await tester.pumpWidget(new Directionality(
+      textDirection: TextDirection.ltr,
+      child: new SizedBox.expand(
         child: new Center(
           child: new SizedBox(
             width: 400.0,
@@ -809,7 +820,7 @@ void main() {
           ),
         ),
       ),
-    );
+    ));
 
     expect(tabController.index, 1);
 
@@ -838,8 +849,9 @@ void main() {
       length: 3,
     );
 
-    await tester.pumpWidget(
-      new SizedBox.expand(
+    await tester.pumpWidget(new Directionality(
+      textDirection: TextDirection.ltr,
+      child: new SizedBox.expand(
         child: new Center(
           child: new SizedBox(
             width: 400.0,
@@ -856,7 +868,7 @@ void main() {
           ),
         ),
       ),
-    );
+    ));
 
     expect(tabController.index, 1);
 
@@ -892,7 +904,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      new Material(
+      boilerplate(
         child: new TabBar(
           isScrollable: true,
           controller: controller,
@@ -926,7 +938,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      new Material(
+      boilerplate(
         child: new Column(
           children: <Widget>[
             new TabBar(
@@ -969,7 +981,7 @@ void main() {
       rect: new Rect.fromLTRB(tabLeft + padLeft, height, tabRight - padRight, height + weight)
     ));
   });
-  
+
   testWidgets('correct semantics', (WidgetTester tester) async {
     final SemanticsTester semantics = new SemanticsTester(tester);
 
@@ -984,7 +996,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      new Material(
+      boilerplate(
         child: new Semantics(
           container: true,
           child: new TabBar(
@@ -1007,21 +1019,77 @@ void main() {
               actions: SemanticsAction.tap.index,
               flags: SemanticsFlags.isSelected.index,
               label: 'TAB #0\nTab 1 of 2',
-              rect: new Rect.fromLTRB(0.0, 0.0, 108.0, 46.0),
+              rect: new Rect.fromLTRB(0.0, 0.0, 108.0, kTextTabBarHeight),
               transform: new Matrix4.translationValues(0.0, 276.0, 0.0),
             ),
             new TestSemantics(
-              id: 5,
+              id: 3,
               actions: SemanticsAction.tap.index,
               label: 'TAB #1\nTab 2 of 2',
-              rect: new Rect.fromLTRB(0.0, 0.0, 108.0, 46.0),
+              rect: new Rect.fromLTRB(0.0, 0.0, 108.0, kTextTabBarHeight),
               transform: new Matrix4.translationValues(108.0, 276.0, 0.0),
             ),
-          ]),
+          ],
+        ),
       ],
     );
 
     expect(semantics, hasSemantics(expectedSemantics));
+
+    semantics.dispose();
+  });
+
+  testWidgets('correct scrolling semantics', (WidgetTester tester) async {
+    final SemanticsTester semantics = new SemanticsTester(tester);
+
+    final List<Tab> tabs = new List<Tab>.generate(20, (int index) {
+      return new Tab(text: 'This is a very wide tab #$index');
+    });
+
+    final TabController controller = new TabController(
+      vsync: const TestVSync(),
+      length: tabs.length,
+      initialIndex: 0,
+    );
+
+    await tester.pumpWidget(
+      boilerplate(
+        child: new Semantics(
+          container: true,
+          child: new TabBar(
+            isScrollable: true,
+            controller: controller,
+            tabs: tabs,
+          ),
+        ),
+      ),
+    );
+
+    const String tab0title = 'This is a very wide tab #0\nTab 1 of 20';
+    const String tab10title = 'This is a very wide tab #10\nTab 11 of 20';
+
+    expect(semantics, includesNodeWith(actions: <SemanticsAction>[SemanticsAction.scrollLeft]));
+    expect(semantics, includesNodeWith(label: tab0title));
+    expect(semantics, isNot(includesNodeWith(label: tab10title)));
+
+    controller.index = 10;
+    await tester.pumpAndSettle();
+
+    expect(semantics, isNot(includesNodeWith(label: tab0title)));
+    expect(semantics, includesNodeWith(actions: <SemanticsAction>[SemanticsAction.scrollLeft, SemanticsAction.scrollRight]));
+    expect(semantics, includesNodeWith(label: tab10title));
+
+    controller.index = 19;
+    await tester.pumpAndSettle();
+
+    expect(semantics, includesNodeWith(actions: <SemanticsAction>[SemanticsAction.scrollRight]));
+
+    controller.index = 0;
+    await tester.pumpAndSettle();
+
+    expect(semantics, includesNodeWith(actions: <SemanticsAction>[SemanticsAction.scrollLeft]));
+    expect(semantics, includesNodeWith(label: tab0title));
+    expect(semantics, isNot(includesNodeWith(label: tab10title)));
 
     semantics.dispose();
   });
@@ -1033,7 +1101,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      new Material(
+      boilerplate(
         child: new Column(
           children: <Widget>[
             new TabBar(
@@ -1073,7 +1141,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      new Material(
+      boilerplate(
         child: new Column(
           children: <Widget>[
             new TabBar(
@@ -1120,4 +1188,111 @@ void main() {
     expect(find.text('PAGE'), findsOneWidget);
   });
 
+  testWidgets('can tap on indicator at very bottom of TabBar to switch tabs', (WidgetTester tester) async {
+    final TabController controller = new TabController(
+      vsync: const TestVSync(),
+      length: 2,
+      initialIndex: 0,
+    );
+
+    await tester.pumpWidget(
+      boilerplate(
+        child: new Column(
+          children: <Widget>[
+            new TabBar(
+              controller: controller,
+              indicatorWeight: 30.0,
+              tabs: const <Widget>[const Tab(text: 'TAB1'), const Tab(text: 'TAB2')],
+            ),
+            new Flexible(
+              child: new TabBarView(
+                controller: controller,
+                children: const <Widget>[const Text('PAGE1'), const Text('PAGE2')],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(controller.index, 0);
+
+    final Offset bottomRight = tester.getBottomRight(find.byType(TabBar)) - const Offset(1.0, 1.0);
+    final TestGesture gesture = await tester.startGesture(bottomRight);
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(controller.index, 1);
+  });
+
+  testWidgets('can override semantics of tabs', (WidgetTester tester) async {
+    final SemanticsTester semantics = new SemanticsTester(tester);
+
+    final List<Tab> tabs = new List<Tab>.generate(2, (int index) {
+      return new Tab(
+        child: new Semantics(
+          label: 'Semantics override $index',
+          child: new ExcludeSemantics(
+            child: new Text('TAB #$index'),
+          ),
+        ),
+      );
+    });
+
+    final TabController controller = new TabController(
+      vsync: const TestVSync(),
+      length: tabs.length,
+      initialIndex: 0,
+    );
+
+    await tester.pumpWidget(
+      boilerplate(
+        child: new Semantics(
+          container: true,
+          child: new TabBar(
+            isScrollable: true,
+            controller: controller,
+            tabs: tabs,
+          ),
+        ),
+      ),
+    );
+
+    final TestSemantics expectedSemantics = new TestSemantics.root(
+      children: <TestSemantics>[
+        new TestSemantics.rootChild(
+          id: 23,
+          rect: TestSemantics.fullScreen,
+          children: <TestSemantics>[
+            new TestSemantics(
+              id: 24,
+              actions: SemanticsAction.tap.index,
+              flags: SemanticsFlags.isSelected.index,
+              label: 'Semantics override 0\nTab 1 of 2',
+              rect: new Rect.fromLTRB(0.0, 0.0, 108.0, kTextTabBarHeight),
+              transform: new Matrix4.translationValues(0.0, 276.0, 0.0),
+            ),
+            new TestSemantics(
+              id: 25,
+              actions: SemanticsAction.tap.index,
+              label: 'Semantics override 1\nTab 2 of 2',
+              rect: new Rect.fromLTRB(0.0, 0.0, 108.0, kTextTabBarHeight),
+              transform: new Matrix4.translationValues(108.0, 276.0, 0.0),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    expect(semantics, hasSemantics(expectedSemantics));
+
+    semantics.dispose();
+  });
+
+  test('illegal constructor combinations', () {
+    final Widget $null = null;
+    expect(() => new Tab(icon: $null), throwsAssertionError);
+    expect(() => new Tab(icon: new Container(), text: 'foo', child: new Container()), throwsAssertionError);
+    expect(() => new Tab(text: 'foo', child: new Container()), throwsAssertionError);
+  });
 }

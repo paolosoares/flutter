@@ -116,7 +116,7 @@ class AndroidApk extends ApplicationPackage {
       if (category.getAttribute('android:name') == 'android.intent.category.LAUNCHER') {
         final xml.XmlElement activity = category.parent.parent;
         final String activityName = activity.getAttribute('android:name');
-        launchActivity = "$packageId/$activityName";
+        launchActivity = '$packageId/$activityName';
         break;
       }
     }
@@ -228,7 +228,7 @@ class BuildableIOSApp extends IOSApp {
   bool get isSwift => buildSettings?.containsKey('SWIFT_VERSION');
 
   String _buildAppPath(String type) {
-    return fs.path.join(getIosBuildDirectory(), 'Release-$type', kBundleName);
+    return fs.path.join(getIosBuildDirectory(), type, kBundleName);
   }
 }
 

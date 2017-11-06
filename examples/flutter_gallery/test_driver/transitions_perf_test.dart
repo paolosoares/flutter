@@ -70,6 +70,7 @@ const List<Demo> demos = const <Demo>[
   const Demo('Activity Indicator', synchronized: false),
   const Demo('Buttons'),
   const Demo('Dialogs'),
+  const Demo('Navigation'),
   const Demo('Sliders'),
   const Demo('Switches'),
 
@@ -121,7 +122,7 @@ Future<Null> saveDurationsHistogram(List<Map<String, dynamic>> events, String ou
     final Iterator<Map<String, dynamic>> eventIter = events.iterator;
     String lastEventName = '';
     String lastRouteName = '';
-    while(eventIter.moveNext()) {
+    while (eventIter.moveNext()) {
       final String eventName = eventIter.current['name'];
 
       if (!<String>['Start Transition', 'Frame'].contains(eventName))

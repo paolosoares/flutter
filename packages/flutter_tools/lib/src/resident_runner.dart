@@ -8,6 +8,7 @@ import 'package:meta/meta.dart';
 
 import 'android/gradle.dart';
 import 'application_package.dart';
+import 'artifacts.dart';
 import 'asset.dart';
 import 'base/common.dart';
 import 'base/file_system.dart';
@@ -16,6 +17,7 @@ import 'base/logger.dart';
 import 'base/terminal.dart';
 import 'base/utils.dart';
 import 'build_info.dart';
+import 'compile.dart';
 import 'dart/dependencies.dart';
 import 'dart/package_map.dart';
 import 'dependency_checker.dart';
@@ -32,10 +34,15 @@ class FlutterDevice {
   List<VMService> vmServices;
   DevFS devFS;
   ApplicationPackage package;
+  ResidentCompiler generator;
 
   StreamSubscription<String> _loggingSubscription;
 
-  FlutterDevice(this.device);
+  FlutterDevice(this.device, { bool previewDart2 : false }) {
+    if (previewDart2)
+      generator = new ResidentCompiler(
+        artifacts.getArtifactPath(Artifact.flutterPatchedSdkPath));
+  }
 
   String viewFilter;
 
@@ -92,8 +99,10 @@ class FlutterDevice {
     if (flutterViews == null || flutterViews.isEmpty)
       return;
     for (FlutterView view in flutterViews) {
-      if (view != null && view.uiIsolate != null)
-        view.uiIsolate.flutterExit();
+      if (view != null && view.uiIsolate != null) {
+        // Manage waits specifically below.
+        view.uiIsolate.flutterExit(); // ignore: unawaited_futures
+      }
     }
     await new Future<Null>.delayed(const Duration(milliseconds: 100));
   }
@@ -130,6 +139,24 @@ class FlutterDevice {
     return reports;
   }
 
+  // Lists program elements changed in the most recent reload that have not
+  // since executed.
+  Future<List<ProgramElement>> unusedChangesInLastReload() async {
+    final List<Future<List<ProgramElement>>> reports =
+      <Future<List<ProgramElement>>>[];
+    for (FlutterView view in views)
+      reports.add(view.uiIsolate.getUnusedChangesInLastReload());
+    final List<ProgramElement> elements = <ProgramElement>[];
+    for (Future<List<ProgramElement>> report in reports) {
+      for (ProgramElement element in await report)
+        elements.add(new ProgramElement(element.qualifiedName,
+                                        devFS.deviceUriToHostUri(element.uri),
+                                        element.line,
+                                        element.column));
+    }
+    return elements;
+  }
+
   Future<Null> debugDumpApp() async {
     for (FlutterView view in views)
       await view.uiIsolate.flutterDebugDumpApp();
@@ -145,9 +172,14 @@ class FlutterDevice {
       await view.uiIsolate.flutterDebugDumpLayerTree();
   }
 
-  Future<Null> debugDumpSemanticsTree() async {
+  Future<Null> debugDumpSemanticsTreeInTraversalOrder() async {
     for (FlutterView view in views)
-      await view.uiIsolate.flutterDebugDumpSemanticsTree();
+      await view.uiIsolate.flutterDebugDumpSemanticsTreeInTraversalOrder();
+  }
+
+  Future<Null> debugDumpSemanticsTreeInInverseHitTestOrder() async {
+    for (FlutterView view in views)
+      await view.uiIsolate.flutterDebugDumpSemanticsTreeInInverseHitTestOrder();
   }
 
   Future<Null> toggleDebugPaintSizeEnabled() async {
@@ -158,6 +190,11 @@ class FlutterDevice {
   Future<Null> debugTogglePerformanceOverlayOverride() async {
     for (FlutterView view in views)
       await view.uiIsolate.flutterTogglePerformanceOverlayOverride();
+  }
+
+  Future<Null> toggleWidgetInspector() async {
+    for (FlutterView view in views)
+      await view.uiIsolate.flutterToggleWidgetInspector();
   }
 
   Future<String> togglePlatform({ String from }) async {
@@ -180,8 +217,7 @@ class FlutterDevice {
     if (_loggingSubscription != null)
       return;
     _loggingSubscription = device.getLogReader(app: package).logLines.listen((String line) {
-      if (!line.contains('Observatory listening on http') &&
-          !line.contains('Diagnostic server listening on http'))
+      if (!line.contains('Observatory listening on http'))
         printStatus(line);
     });
   }
@@ -203,7 +239,7 @@ class FlutterDevice {
     bool shouldBuild,
   }) async {
     final bool prebuiltMode = hotRunner.applicationBinary != null;
-    final String modeName = getModeName(hotRunner.debuggingOptions.buildMode);
+    final String modeName = hotRunner.debuggingOptions.buildInfo.modeName;
     printStatus('Launching ${getDisplayPath(hotRunner.mainPath)} on ${device.name} in $modeName mode...');
 
     final TargetPlatform targetPlatform = await device.targetPlatform;
@@ -229,13 +265,11 @@ class FlutterDevice {
     final bool hasDirtyDependencies = hotRunner.hasDirtyDependencies(this);
     final Future<LaunchResult> futureResult = device.startApp(
       package,
-      hotRunner.debuggingOptions.buildMode,
       mainPath: hotRunner.mainPath,
       debuggingOptions: hotRunner.debuggingOptions,
       platformArgs: platformArgs,
       route: route,
       prebuiltApplication: prebuiltMode,
-      kernelPath: hotRunner.kernelFilePath,
       applicationNeedsRebuild: shouldBuild || hasDirtyDependencies,
       usesTerminalUi: hotRunner.usesTerminalUI,
     );
@@ -263,7 +297,7 @@ class FlutterDevice {
       applicationBinary: coldRunner.applicationBinary
     );
 
-    final String modeName = getModeName(coldRunner.debuggingOptions.buildMode);
+    final String modeName = coldRunner.debuggingOptions.buildInfo.modeName;
     final bool prebuiltMode = coldRunner.applicationBinary != null;
     if (coldRunner.mainPath == null) {
       assert(prebuiltMode);
@@ -290,7 +324,6 @@ class FlutterDevice {
     final bool hasDirtyDependencies = coldRunner.hasDirtyDependencies(this);
     final LaunchResult result = await device.startApp(
       package,
-      coldRunner.debuggingOptions.buildMode,
       mainPath: coldRunner.mainPath,
       debuggingOptions: coldRunner.debuggingOptions,
       platformArgs: platformArgs,
@@ -311,9 +344,12 @@ class FlutterDevice {
   }
 
   Future<bool> updateDevFS({
+    String mainPath,
+    String target,
     AssetBundle bundle,
     bool bundleDirty: false,
-    Set<String> fileFilter
+    Set<String> fileFilter,
+    bool fullRestart: false
   }) async {
     final Status devFSStatus = logger.startProgress(
       'Syncing files to device ${device.name}...',
@@ -322,9 +358,13 @@ class FlutterDevice {
     int bytes = 0;
     try {
       bytes = await devFS.update(
+        mainPath: mainPath,
+        target: target,
         bundle: bundle,
         bundleDirty: bundleDirty,
-        fileFilter: fileFilter
+        fileFilter: fileFilter,
+        generator: generator,
+        fullRestart: fullRestart
       );
     } on DevFSException {
       devFSStatus.cancel();
@@ -333,6 +373,13 @@ class FlutterDevice {
     devFSStatus.stop();
     printTrace('Synced ${getSizeAsMB(bytes)}.');
     return true;
+  }
+
+  void updateReloadStatus(bool wasReloadSuccessful) {
+    if (wasReloadSuccessful)
+      generator?.accept();
+    else
+      generator?.reject();
   }
 }
 
@@ -373,9 +420,9 @@ abstract class ResidentRunner {
   AssetBundle _assetBundle;
   AssetBundle get assetBundle => _assetBundle;
 
-  bool get isRunningDebug => debuggingOptions.buildMode == BuildMode.debug;
-  bool get isRunningProfile => debuggingOptions.buildMode == BuildMode.profile;
-  bool get isRunningRelease => debuggingOptions.buildMode == BuildMode.release;
+  bool get isRunningDebug => debuggingOptions.buildInfo.isDebug;
+  bool get isRunningProfile => debuggingOptions.buildInfo.isProfile;
+  bool get isRunningRelease => debuggingOptions.buildInfo.isRelease;
   bool get supportsServiceProtocol => isRunningDebug || isRunningProfile;
 
   /// Start the app and keep the process running during its lifetime.
@@ -428,10 +475,16 @@ abstract class ResidentRunner {
       await device.debugDumpLayerTree();
   }
 
-  Future<Null> _debugDumpSemanticsTree() async {
+  Future<Null> _debugDumpSemanticsTreeInTraversalOrder() async {
     await refreshViews();
     for (FlutterDevice device in flutterDevices)
-      await device.debugDumpSemanticsTree();
+      await device.debugDumpSemanticsTreeInTraversalOrder();
+  }
+
+  Future<Null> _debugDumpSemanticsTreeInInverseHitTestOrder() async {
+    await refreshViews();
+    for (FlutterDevice device in flutterDevices)
+      await device.debugDumpSemanticsTreeInInverseHitTestOrder();
   }
 
   Future<Null> _debugToggleDebugPaintSizeEnabled() async {
@@ -446,6 +499,12 @@ abstract class ResidentRunner {
       await device.debugTogglePerformanceOverlayOverride();
   }
 
+  Future<Null> _debugToggleWidgetInspector() async {
+    await refreshViews();
+    for (FlutterDevice device in flutterDevices)
+      await device.toggleWidgetInspector();
+  }
+
   Future<Null> _screenshot(FlutterDevice device) async {
     final Status status = logger.startProgress('Taking screenshot for ${device.device.name}...');
     final File outputFile = getUniqueFile(fs.currentDirectory, 'flutter', 'png');
@@ -457,7 +516,7 @@ abstract class ResidentRunner {
             await view.uiIsolate.flutterDebugAllowBanner(false);
         } catch (error) {
           status.stop();
-          printError(error);
+          printError('Error communicating with Flutter on the device: $error');
         }
       }
       try {
@@ -469,7 +528,7 @@ abstract class ResidentRunner {
               await view.uiIsolate.flutterDebugAllowBanner(true);
           } catch (error) {
             status.stop();
-            printError(error);
+            printError('Error communicating with Flutter on the device: $error');
           }
         }
       }
@@ -525,8 +584,9 @@ abstract class ResidentRunner {
   }
 
   Future<Null> stopEchoingDeviceLog() async {
-    for (FlutterDevice device in flutterDevices)
-      device.stopEchoingDeviceLog();
+    await Future.wait(
+      flutterDevices.map((FlutterDevice device) => device.stopEchoingDeviceLog())
+    );
   }
 
   /// If the [reloadSources] parameter is not null the 'reloadSources' service
@@ -553,7 +613,10 @@ abstract class ResidentRunner {
     // Listen for service protocol connection to close.
     for (FlutterDevice device in flutterDevices) {
       for (VMService service in device.vmServices) {
-        service.done.then<Null>(
+        // This hooks up callbacks for when the connection stops in the future.
+        // We don't want to wait for them. We don't handle errors in those callbacks'
+        // futures either because they just print to logger and is not critical.
+        service.done.then<Null>( // ignore: unawaited_futures
           _serviceProtocolDone,
           onError: _serviceProtocolError
         ).whenComplete(_serviceDisconnected);
@@ -598,7 +661,12 @@ abstract class ResidentRunner {
       }
     } else if (character == 'S') {
       if (supportsServiceProtocol) {
-        await _debugDumpSemanticsTree();
+        await _debugDumpSemanticsTreeInTraversalOrder();
+        return true;
+      }
+    } else if (character == 'U') {
+      if (supportsServiceProtocol) {
+        await _debugDumpSemanticsTreeInInverseHitTestOrder();
         return true;
       }
     } else if (character == 'p') {
@@ -609,6 +677,10 @@ abstract class ResidentRunner {
     } else if (character == 'P') {
       if (supportsServiceProtocol) {
         await _debugTogglePerformanceOverlayOverride();
+      }
+    } else if (lower == 'i') {
+      if (supportsServiceProtocol) {
+        await _debugToggleWidgetInspector();
         return true;
       }
     } else if (character == 's') {
@@ -646,6 +718,9 @@ abstract class ResidentRunner {
       final bool handled = await _commonTerminalInputHandler(command);
       if (!handled)
         await handleTerminalCommand(command);
+    } catch (error, st) {
+      printError('$error\n$st');
+      _cleanUpAndExit(null);
     } finally {
       _processingUserRequest = false;
     }
@@ -727,11 +802,12 @@ abstract class ResidentRunner {
       printStatus('You can dump the widget hierarchy of the app (debugDumpApp) by pressing "w".');
       printStatus('To dump the rendering tree of the app (debugDumpRenderTree), press "t".');
       if (isRunningDebug) {
-        printStatus('For layers (debugDumpLayerTree), use "L"; accessibility (debugDumpSemantics), "S".');
+        printStatus('For layers (debugDumpLayerTree), use "L"; accessibility (debugDumpSemantics), "S" (traversal order) or "U" (inverse hit test order).');
+        printStatus('To toggle the widget inspector (WidgetsApp.showWidgetInspectorOverride), press "i".');
         printStatus('To toggle the display of construction lines (debugPaintSizeEnabled), press "p".');
         printStatus('To simulate different operating systems, (defaultTargetPlatform), press "o".');
       } else {
-        printStatus('To dump the accessibility tree (debugDumpSemantics), press "S".');
+        printStatus('To dump the accessibility tree (debugDumpSemantics), press "S" (for traversal order) or "U" (for inverse hit test order).');
       }
       printStatus('To display the performance overlay (WidgetsApp.showPerformanceOverlay), press "P".');
     }
@@ -748,14 +824,15 @@ abstract class ResidentRunner {
 }
 
 class OperationResult {
-  static final OperationResult ok = new OperationResult(0, '');
-
-  OperationResult(this.code, this.message);
+  OperationResult(this.code, this.message, [this.hint]);
 
   final int code;
   final String message;
+  final String hint;
 
   bool get isOk => code == 0;
+
+  static final OperationResult ok = new OperationResult(0, '');
 }
 
 /// Given the value of the --target option, return the path of the Dart file

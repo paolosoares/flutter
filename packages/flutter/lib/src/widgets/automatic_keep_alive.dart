@@ -113,7 +113,7 @@ class _AutomaticKeepAliveState extends State<AutomaticKeepAlive> {
           );
         }
         return true;
-      });
+      }());
       _handles.remove(handle);
       if (_handles.isEmpty) {
         if (SchedulerBinding.instance.schedulerPhase.index < SchedulerPhase.persistentCallbacks.index) {
@@ -198,7 +198,7 @@ class _AutomaticKeepAliveState extends State<AutomaticKeepAlive> {
 
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new FlagProperty('_keepingAlive', value: _keepingAlive, ifTrue: 'keeping subtree alive'));
     description.add(new DiagnosticsProperty<Map<Listenable, VoidCallback>>(

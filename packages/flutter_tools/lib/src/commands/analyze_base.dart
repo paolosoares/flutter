@@ -53,8 +53,8 @@ abstract class AnalyzeBase {
   bool get isBenchmarking => argResults['benchmark'];
 }
 
-/// Return `true` if [fileList] contains a path that resides inside the Flutter repository.
-/// If [fileList] is empty, then return `true` if the current directory resides inside the Flutter repository.
+/// Return true if [fileList] contains a path that resides inside the Flutter repository.
+/// If [fileList] is empty, then return true if the current directory resides inside the Flutter repository.
 bool inRepo(List<String> fileList) {
   if (fileList == null || fileList.isEmpty)
     fileList = <String>[fs.path.current];
@@ -132,22 +132,22 @@ class PackageDependencyTracker {
     final File dotPackages = fs.file(dotPackagesPath);
     if (dotPackages.existsSync()) {
       // this directory has opinions about what we should be using
-      dotPackages
+      final Iterable<String> lines = dotPackages
         .readAsStringSync()
         .split('\n')
-        .where((String line) => !line.startsWith(new RegExp(r'^ *#')))
-        .forEach((String line) {
-          final int colon = line.indexOf(':');
-          if (colon > 0) {
-            final String packageName = line.substring(0, colon);
-            final String packagePath = fs.path.fromUri(line.substring(colon+1));
-            // Ensure that we only add `analyzer` and dependent packages defined in the vended SDK (and referred to with a local
-            // fs.path. directive). Analyzer package versions reached via transitive dependencies (e.g., via `test`) are ignored
-            // since they would produce spurious conflicts.
-            if (!_vendedSdkPackages.contains(packageName) || packagePath.startsWith('..'))
-              add(packageName, fs.path.normalize(fs.path.absolute(directory.path, packagePath)), dotPackagesPath);
-          }
-      });
+        .where((String line) => !line.startsWith(new RegExp(r'^ *#')));
+      for (String line in lines) {
+        final int colon = line.indexOf(':');
+        if (colon > 0) {
+          final String packageName = line.substring(0, colon);
+          final String packagePath = fs.path.fromUri(line.substring(colon+1));
+          // Ensure that we only add `analyzer` and dependent packages defined in the vended SDK (and referred to with a local
+          // fs.path. directive). Analyzer package versions reached via transitive dependencies (e.g., via `test`) are ignored
+          // since they would produce spurious conflicts.
+          if (!_vendedSdkPackages.contains(packageName) || packagePath.startsWith('..'))
+            add(packageName, fs.path.normalize(fs.path.absolute(directory.path, packagePath)), dotPackagesPath);
+        }
+      }
     }
   }
 
@@ -182,12 +182,15 @@ class PackageDependencyTracker {
       message.writeln('Make sure you have run "pub upgrade" in all the directories mentioned above.');
       if (dependencies.hasConflictsAffectingFlutterRepo) {
         message.writeln(
-            'For packages in the flutter repository, try using '
-            '"flutter update-packages --upgrade" to do all of them at once.');
+          'For packages in the flutter repository, try using "flutter update-packages" to do all of them at once.\n'
+          'If you need to actually upgrade them, consider "flutter update-packages --force-upgrade". '
+          '(This will update your pubspec.yaml files as well, so you may wish to do this on a separate branch.)'
+        );
       }
       message.write(
-          'If this does not help, to track down the conflict you can use '
-          '"pub deps --style=list" and "pub upgrade --verbosity=solver" in the affected directories.');
+        'If this does not help, to track down the conflict you can use '
+        '"pub deps --style=list" and "pub upgrade --verbosity=solver" in the affected directories.'
+      );
       throwToolExit(message.toString());
     }
   }

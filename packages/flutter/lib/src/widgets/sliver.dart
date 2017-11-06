@@ -25,7 +25,7 @@ export 'package:flutter/rendering.dart' show
 ///
 /// It's uncommon to subclass [SliverChildDelegate]. Instead, consider using one
 /// of the existing subclasses that provide adaptors to builder callbacks or
-/// explict child lists.
+/// explicit child lists.
 ///
 /// See also:
 ///
@@ -355,7 +355,7 @@ abstract class SliverMultiBoxAdaptorWidget extends RenderObjectWidget {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<SliverChildDelegate>('delegate', delegate));
   }
@@ -422,7 +422,7 @@ class SliverList extends SliverMultiBoxAdaptorWidget {
 ///   delegate: new SliverChildBuilderDelegate(
 ///     (BuildContext context, int index) {
 ///       return new Container(
-///         alignment: FractionalOffset.center,
+///         alignment: Alignment.center,
 ///         color: Colors.lightBlue[100 * (index % 9)],
 ///         child: new Text('list item $index'),
 ///       );
@@ -489,7 +489,7 @@ class SliverFixedExtentList extends SliverMultiBoxAdaptorWidget {
 ///   delegate: new SliverChildBuilderDelegate(
 ///     (BuildContext context, int index) {
 ///       return new Container(
-///         alignment: FractionalOffset.center,
+///         alignment: Alignment.center,
 ///         color: Colors.teal[100 * (index % 9)],
 ///         child: new Text('grid item $index'),
 ///       );
@@ -842,7 +842,7 @@ class SliverMultiBoxAdaptorElement extends RenderObjectElement implements Render
       final SliverMultiBoxAdaptorParentData childParentData = child.parentData;
       assert(slot == childParentData.index);
       return true;
-    });
+    }());
   }
 
   @override
@@ -902,7 +902,7 @@ class KeepAlive extends ParentDataWidget<SliverMultiBoxAdaptorWidget> {
   /// Marks a child as needing to remain alive.
   ///
   /// The [child] and [keepAlive] arguments must not be null.
-  KeepAlive({
+  const KeepAlive({
     Key key,
     @required this.keepAlive,
     @required Widget child,
@@ -935,7 +935,7 @@ class KeepAlive extends ParentDataWidget<SliverMultiBoxAdaptorWidget> {
   bool debugCanApplyOutOfTurn() => keepAlive;
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<bool>('keepAlive', keepAlive));
   }

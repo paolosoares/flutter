@@ -143,7 +143,8 @@ class Daemon {
 
   void shutdown({dynamic error}) {
     _commandSubscription?.cancel();
-    _domainMap.values.forEach((Domain domain) => domain.dispose());
+    for (Domain domain in _domainMap.values)
+      domain.dispose();
     if (!_onExitCompleter.isCompleted) {
       if (error == null)
         _onExitCompleter.complete(0);
@@ -196,28 +197,28 @@ abstract class Domain {
 
   String _getStringArg(Map<String, dynamic> args, String name, { bool required: false }) {
     if (required && !args.containsKey(name))
-      throw "$name is required";
+      throw '$name is required';
     final dynamic val = args[name];
     if (val != null && val is! String)
-      throw "$name is not a String";
+      throw '$name is not a String';
     return val;
   }
 
   bool _getBoolArg(Map<String, dynamic> args, String name, { bool required: false }) {
     if (required && !args.containsKey(name))
-      throw "$name is required";
+      throw '$name is required';
     final dynamic val = args[name];
     if (val != null && val is! bool)
-      throw "$name is not a bool";
+      throw '$name is not a bool';
     return val;
   }
 
   int _getIntArg(Map<String, dynamic> args, String name, { bool required: false }) {
     if (required && !args.containsKey(name))
-      throw "$name is required";
+      throw '$name is required';
     final dynamic val = args[name];
     if (val != null && val is! int)
-      throw "$name is not an int";
+      throw '$name is not an int';
     return val;
   }
 
@@ -302,6 +303,7 @@ class AppDomain extends Domain {
     final bool useTestFonts = _getBoolArg(args, 'useTestFonts') ?? false;
     final String route = _getStringArg(args, 'route');
     final String mode = _getStringArg(args, 'mode');
+    final String flavor = _getStringArg(args, 'flavor');
     final String target = _getStringArg(args, 'target');
     final bool enableHotReload = _getBoolArg(args, 'hot') ?? kHotReloadDefault;
 
@@ -312,13 +314,13 @@ class AppDomain extends Domain {
     if (!fs.isDirectorySync(projectDirectory))
       throw "'$projectDirectory' does not exist";
 
-    final BuildMode buildMode = getBuildModeForName(mode) ?? BuildMode.debug;
+    final BuildInfo buildInfo = new BuildInfo(getBuildModeForName(mode) ?? BuildMode.debug, flavor);
     DebuggingOptions options;
-    if (buildMode == BuildMode.release) {
-      options = new DebuggingOptions.disabled(buildMode);
+    if (buildInfo.isRelease) {
+      options = new DebuggingOptions.disabled(buildInfo);
     } else {
       options = new DebuggingOptions.enabled(
-        buildMode,
+        buildInfo,
         startPaused: startPaused,
         useTestFonts: useTestFonts,
       );
@@ -349,8 +351,8 @@ class AppDomain extends Domain {
     String packagesFilePath,
     String projectAssets,
   }) async {
-    if (await device.isLocalEmulator && !isEmulatorBuildMode(options.buildMode))
-      throw '${toTitleCase(getModeName(options.buildMode))} mode is not supported for emulators.';
+    if (await device.isLocalEmulator && !options.buildInfo.supportsEmulator)
+      throw '${toTitleCase(options.buildInfo.modeName)} mode is not supported for emulators.';
 
     // We change the current working directory for the duration of the `start` command.
     final Directory cwd = fs.currentDirectory;
@@ -393,7 +395,9 @@ class AppDomain extends Domain {
 
     if (options.debuggingEnabled) {
       connectionInfoCompleter = new Completer<DebugConnectionInfo>();
-      connectionInfoCompleter.future.then<Null>((DebugConnectionInfo info) {
+      // We don't want to wait for this future to complete and callbacks won't fail.
+      // As it just writes to stdout.
+      connectionInfoCompleter.future.then<Null>((DebugConnectionInfo info) { // ignore: unawaited_futures
         final Map<String, dynamic> params = <String, dynamic>{
           'port': info.httpUri.port,
           'wsUri': info.wsUri.toString(),
@@ -404,7 +408,9 @@ class AppDomain extends Domain {
       });
     }
     final Completer<Null> appStartedCompleter = new Completer<Null>();
-    appStartedCompleter.future.then<Null>((Null value) {
+    // We don't want to wait for this future to complete and callbacks won't fail.
+    // As it just writes to stdout.
+    appStartedCompleter.future.then<Null>((Null value) { // ignore: unawaited_futures
       _sendAppEvent(app, 'started');
     });
 
@@ -502,7 +508,6 @@ class AppDomain extends Domain {
       return <String, dynamic>{
         'id': app.id,
         'observatoryDevicePort': app.observatoryPort,
-        'diagnosticDevicePort': app.diagnosticPort,
       };
     }).toList();
   }

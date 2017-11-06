@@ -88,7 +88,7 @@ class CupertinoSwitch extends StatefulWidget {
   _CupertinoSwitchState createState() => new _CupertinoSwitchState();
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new FlagProperty('value', value: value, ifTrue: 'on', ifFalse: 'off', showName: true));
     description.add(new ObjectFlagProperty<ValueChanged<bool>>('onChanged', onChanged, ifNull: 'disabled'));
@@ -127,6 +127,7 @@ class _CupertinoSwitchRenderObjectWidget extends LeafRenderObjectWidget {
       value: value,
       activeColor: activeColor,
       onChanged: onChanged,
+      textDirection: Directionality.of(context),
       vsync: vsync,
     );
   }
@@ -137,6 +138,7 @@ class _CupertinoSwitchRenderObjectWidget extends LeafRenderObjectWidget {
       ..value = value
       ..activeColor = activeColor
       ..onChanged = onChanged
+      ..textDirection = Directionality.of(context)
       ..vsync = vsync;
   }
 }
@@ -154,11 +156,12 @@ const Color _kTrackColor = CupertinoColors.lightBackgroundGray;
 const Duration _kReactionDuration = const Duration(milliseconds: 300);
 const Duration _kToggleDuration = const Duration(milliseconds: 200);
 
-class _RenderCupertinoSwitch extends RenderConstrainedBox implements SemanticsActionHandler {
+class _RenderCupertinoSwitch extends RenderConstrainedBox {
   _RenderCupertinoSwitch({
     @required bool value,
     @required Color activeColor,
     ValueChanged<bool> onChanged,
+    @required TextDirection textDirection,
     @required TickerProvider vsync,
   }) : assert(value != null),
        assert(activeColor != null),
@@ -166,6 +169,7 @@ class _RenderCupertinoSwitch extends RenderConstrainedBox implements SemanticsAc
        _value = value,
        _activeColor = activeColor,
        _onChanged = onChanged,
+       _textDirection = textDirection,
        _vsync = vsync,
        super(additionalConstraints: const BoxConstraints.tightFor(width: _kSwitchWidth, height: _kSwitchHeight)) {
     _tap = new TapGestureRecognizer()
@@ -210,7 +214,7 @@ class _RenderCupertinoSwitch extends RenderConstrainedBox implements SemanticsAc
     if (value == _value)
       return;
     _value = value;
-    markNeedsSemanticsUpdate(onlyChanges: true, noGeometry: true);
+    markNeedsSemanticsUpdate(onlyLocalUpdates: true);
     _position
       ..curve = Curves.ease
       ..reverseCurve = Curves.ease.flipped;
@@ -250,8 +254,18 @@ class _RenderCupertinoSwitch extends RenderConstrainedBox implements SemanticsAc
     _onChanged = value;
     if (wasInteractive != isInteractive) {
       markNeedsPaint();
-      markNeedsSemanticsUpdate(noGeometry: true);
+      markNeedsSemanticsUpdate();
     }
+  }
+
+  TextDirection get textDirection => _textDirection;
+  TextDirection _textDirection;
+  set textDirection(TextDirection value) {
+    assert(value != null);
+    if (_textDirection == value)
+      return;
+    _textDirection = value;
+    markNeedsPaint();
   }
 
   bool get isInteractive => onChanged != null;
@@ -328,7 +342,15 @@ class _RenderCupertinoSwitch extends RenderConstrainedBox implements SemanticsAc
       _position
         ..curve = null
         ..reverseCurve = null;
-      _positionController.value += details.primaryDelta / _kTrackInnerLength;
+      final double delta = details.primaryDelta / _kTrackInnerLength;
+      switch (textDirection) {
+        case TextDirection.rtl:
+          _positionController.value -= delta;
+          break;
+        case TextDirection.ltr:
+          _positionController.value += delta;
+          break;
+      }
     }
   }
 
@@ -353,23 +375,13 @@ class _RenderCupertinoSwitch extends RenderConstrainedBox implements SemanticsAc
   }
 
   @override
-  bool get isSemanticBoundary => isInteractive;
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
 
-  @override
-  SemanticsAnnotator get semanticsAnnotator => _annotate;
-
-  void _annotate(SemanticsNode semantics) {
-    semantics
-      ..hasCheckedState = true
-      ..isChecked = _value;
+    config.isSemanticBoundary = isInteractive;
     if (isInteractive)
-      semantics.addAction(SemanticsAction.tap);
-  }
-
-  @override
-  void performAction(SemanticsAction action) {
-    if (action == SemanticsAction.tap)
-      _handleTap();
+      config.addAction(SemanticsAction.tap, _handleTap);
+    config.isChecked = _value;
   }
 
   final CupertinoThumbPainter _thumbPainter = new CupertinoThumbPainter();
@@ -378,11 +390,21 @@ class _RenderCupertinoSwitch extends RenderConstrainedBox implements SemanticsAc
   void paint(PaintingContext context, Offset offset) {
     final Canvas canvas = context.canvas;
 
-    final double currentPosition = _position.value;
+    final double currentValue = _position.value;
     final double currentReactionValue = _reaction.value;
 
+    double visualPosition;
+    switch (textDirection) {
+      case TextDirection.rtl:
+        visualPosition = 1.0 - currentValue;
+        break;
+      case TextDirection.ltr:
+        visualPosition = currentValue;
+        break;
+    }
+
     final Color trackColor = _value ? activeColor : _kTrackColor;
-    final double borderThickness = 1.5 + (_kTrackRadius - 1.5) * math.max(currentReactionValue, currentPosition);
+    final double borderThickness = 1.5 + (_kTrackRadius - 1.5) * math.max(currentReactionValue, currentValue);
 
     final Paint paint = new Paint()
       ..color = trackColor;
@@ -401,12 +423,12 @@ class _RenderCupertinoSwitch extends RenderConstrainedBox implements SemanticsAc
     final double thumbLeft = lerpDouble(
       trackRect.left + _kTrackInnerStart - CupertinoThumbPainter.radius,
       trackRect.left + _kTrackInnerEnd - CupertinoThumbPainter.radius - currentThumbExtension,
-      currentPosition,
+      visualPosition,
     );
     final double thumbRight = lerpDouble(
       trackRect.left + _kTrackInnerStart + CupertinoThumbPainter.radius + currentThumbExtension,
       trackRect.left + _kTrackInnerEnd + CupertinoThumbPainter.radius,
-      currentPosition,
+      visualPosition,
     );
     final double thumbCenterY = offset.dy + size.height / 2.0;
 
@@ -419,7 +441,7 @@ class _RenderCupertinoSwitch extends RenderConstrainedBox implements SemanticsAc
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new FlagProperty('value', value: value, ifTrue: 'checked', ifFalse: 'unchecked', showName: true));
     description.add(new FlagProperty('isInteractive', value: isInteractive, ifTrue: 'enabled', ifFalse: 'disabled', showName: true, defaultValue: true));

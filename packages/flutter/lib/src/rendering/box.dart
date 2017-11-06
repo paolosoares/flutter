@@ -260,7 +260,7 @@ class BoxConstraints extends Constraints {
       if (size is _DebugSize)
         result = new _DebugSize(result, size._owner, size._canBeUsedByParent);
       return true;
-    });
+    }());
     return result;
   }
 
@@ -271,7 +271,7 @@ class BoxConstraints extends Constraints {
   /// separately provided widths and heights.
   Size constrain(Size size) {
     Size result = new Size(constrainWidth(size.width), constrainHeight(size.height));
-    assert(() { result = _debugPropagateDebugSize(size, result); return true; });
+    assert(() { result = _debugPropagateDebugSize(size, result); return true; }());
     return result;
   }
 
@@ -294,7 +294,7 @@ class BoxConstraints extends Constraints {
   Size constrainSizeAndAttemptToPreserveAspectRatio(Size size) {
     if (isTight) {
       Size result = smallest;
-      assert(() { result = _debugPropagateDebugSize(size, result); return true; });
+      assert(() { result = _debugPropagateDebugSize(size, result); return true; }());
       return result;
     }
 
@@ -325,7 +325,7 @@ class BoxConstraints extends Constraints {
     }
 
     Size result = new Size(constrainWidth(width), constrainHeight(height));
-    assert(() { result = _debugPropagateDebugSize(size, result); return true; });
+    assert(() { result = _debugPropagateDebugSize(size, result); return true; }());
     return result;
   }
 
@@ -411,11 +411,15 @@ class BoxConstraints extends Constraints {
       return a * (1.0 - t);
     assert(a.debugAssertIsValid());
     assert(b.debugAssertIsValid());
+    assert((a.minWidth.isFinite && b.minWidth.isFinite) || (a.minWidth == double.INFINITY && b.minWidth == double.INFINITY), 'Cannot interpolate between finite constraints and unbounded constraints.');
+    assert((a.maxWidth.isFinite && b.maxWidth.isFinite) || (a.maxWidth == double.INFINITY && b.maxWidth == double.INFINITY), 'Cannot interpolate between finite constraints and unbounded constraints.');
+    assert((a.minHeight.isFinite && b.minHeight.isFinite) || (a.minHeight == double.INFINITY && b.minHeight == double.INFINITY), 'Cannot interpolate between finite constraints and unbounded constraints.');
+    assert((a.maxHeight.isFinite && b.maxHeight.isFinite) || (a.maxHeight == double.INFINITY && b.maxHeight == double.INFINITY), 'Cannot interpolate between finite constraints and unbounded constraints.');
     return new BoxConstraints(
-      minWidth: ui.lerpDouble(a.minWidth, b.minWidth, t),
-      maxWidth: ui.lerpDouble(a.maxWidth, b.maxWidth, t),
-      minHeight: ui.lerpDouble(a.minHeight, b.minHeight, t),
-      maxHeight: ui.lerpDouble(a.maxHeight, b.maxHeight, t)
+      minWidth: a.minWidth.isFinite ? ui.lerpDouble(a.minWidth, b.minWidth, t) : double.INFINITY,
+      maxWidth: a.maxWidth.isFinite ? ui.lerpDouble(a.maxWidth, b.maxWidth, t) : double.INFINITY,
+      minHeight: a.minHeight.isFinite ? ui.lerpDouble(a.minHeight, b.minHeight, t) : double.INFINITY,
+      maxHeight: a.maxHeight.isFinite ? ui.lerpDouble(a.maxHeight, b.maxHeight, t) : double.INFINITY,
     );
   }
 
@@ -495,7 +499,7 @@ class BoxConstraints extends Constraints {
       }
       assert(isNormalized);
       return true;
-    });
+    }());
     return isNormalized;
   }
 
@@ -1038,7 +1042,7 @@ abstract class RenderBox extends RenderObject {
       if (RenderObject.debugCheckingIntrinsics)
         shouldCache = false;
       return true;
-    });
+    }());
     if (shouldCache) {
       _cachedIntrinsicDimensions ??= <_IntrinsicDimensionsCacheEntry, double>{};
       return _cachedIntrinsicDimensions.putIfAbsent(
@@ -1085,7 +1089,7 @@ abstract class RenderBox extends RenderObject {
         );
       }
       return true;
-    });
+    }());
     return _computeIntrinsicDimension(_IntrinsicDimension.minWidth, height, computeMinIntrinsicWidth);
   }
 
@@ -1224,7 +1228,7 @@ abstract class RenderBox extends RenderObject {
         );
       }
       return true;
-    });
+    }());
     return _computeIntrinsicDimension(_IntrinsicDimension.maxWidth, height, computeMaxIntrinsicWidth);
   }
 
@@ -1300,7 +1304,7 @@ abstract class RenderBox extends RenderObject {
         );
       }
       return true;
-    });
+    }());
     return _computeIntrinsicDimension(_IntrinsicDimension.minHeight, width, computeMinIntrinsicHeight);
   }
 
@@ -1373,7 +1377,7 @@ abstract class RenderBox extends RenderObject {
         );
       }
       return true;
-    });
+    }());
     return _computeIntrinsicDimension(_IntrinsicDimension.maxHeight, width, computeMaxIntrinsicHeight);
   }
 
@@ -1443,7 +1447,7 @@ abstract class RenderBox extends RenderObject {
         assert(_size == this._size);
       }
       return true;
-    });
+    }());
     return _size;
   }
   Size _size;
@@ -1481,13 +1485,13 @@ abstract class RenderBox extends RenderObject {
         'The RenderBox in question is:\n'
         '  $this'
       );
-    });
+    }());
     assert(() {
       value = debugAdoptSize(value);
       return true;
-    });
+    }());
     _size = value;
-    assert(() { debugAssertDoesMeetConstraints(); return true; });
+    assert(() { debugAssertDoesMeetConstraints(); return true; }());
   }
 
   /// Claims ownership of the given [Size].
@@ -1549,7 +1553,7 @@ abstract class RenderBox extends RenderObject {
       }
       result = new _DebugSize(value, this, debugCanParentUseSize);
       return true;
-    });
+    }());
     return result;
   }
 
@@ -1594,7 +1598,7 @@ abstract class RenderBox extends RenderObject {
                ((RenderObject.debugActivePaint == this) && debugDoingThisPaint);
       assert(parent == this.parent);
       return false;
-    });
+    }());
     assert(_debugSetDoingBaseline(true));
     final double result = getDistanceToActualBaseline(baseline);
     assert(_debugSetDoingBaseline(false));
@@ -1667,7 +1671,7 @@ abstract class RenderBox extends RenderObject {
             node = node.parent;
           information.writeln('The nearest ancestor providing an unbounded width constraint is:');
           information.write('  ');
-          information.writeln(node.toStringShallow('\n  '));
+          information.writeln(node.toStringShallow(joiner: '\n  '));
          }
         if (!constraints.hasBoundedHeight) {
           RenderBox node = this;
@@ -1675,7 +1679,7 @@ abstract class RenderBox extends RenderObject {
             node = node.parent;
           information.writeln('The nearest ancestor providing an unbounded height constraint is:');
           information.write('  ');
-          information.writeln(node.toStringShallow('\n  '));
+          information.writeln(node.toStringShallow(joiner: '\n  '));
 
         }
         throw new FlutterError(
@@ -1752,7 +1756,7 @@ abstract class RenderBox extends RenderObject {
         }
       }
       return true;
-    });
+    }());
   }
 
   @override
@@ -1793,7 +1797,7 @@ abstract class RenderBox extends RenderObject {
         );
       }
       return true;
-    });
+    }());
   }
 
   /// Determines the set of render objects located at the given position.
@@ -1840,7 +1844,7 @@ abstract class RenderBox extends RenderObject {
         );
       }
       return true;
-    });
+    }());
     if (_size.contains(position)) {
       if (hitTestChildren(result, position: position) || hitTestSelf(position)) {
         result.add(new BoxHitTestEntry(this, position));
@@ -1901,7 +1905,7 @@ abstract class RenderBox extends RenderObject {
         );
       }
       return true;
-    });
+    }());
     final BoxParentData childParentData = child.parentData;
     final Offset offset = childParentData.offset;
     transform.translate(offset.dx, offset.dy);
@@ -2004,7 +2008,7 @@ abstract class RenderBox extends RenderObject {
         markNeedsPaint();
       }
       return true;
-    });
+    }());
     return true;
   }
 
@@ -2018,7 +2022,7 @@ abstract class RenderBox extends RenderObject {
       if (debugPaintPointersEnabled)
         debugPaintPointers(context, offset);
       return true;
-    });
+    }());
   }
 
   /// In debug mode, paints a border around this render box.
@@ -2030,10 +2034,10 @@ abstract class RenderBox extends RenderObject {
       final Paint paint = new Paint()
        ..style = PaintingStyle.stroke
        ..strokeWidth = 1.0
-       ..color = debugPaintSizeColor;
+       ..color = const Color(0xFF00FFFF);
       context.canvas.drawRect((offset & size).deflate(0.5), paint);
       return true;
-    });
+    }());
   }
 
   /// In debug mode, paints a line for each baseline.
@@ -2049,7 +2053,7 @@ abstract class RenderBox extends RenderObject {
       // ideographic baseline
       final double baselineI = getDistanceToBaseline(TextBaseline.ideographic, onlyReal: true);
       if (baselineI != null) {
-        paint.color = debugPaintIdeographicBaselineColor;
+        paint.color = const Color(0xFFFFD000);
         path = new Path();
         path.moveTo(offset.dx, offset.dy + baselineI);
         path.lineTo(offset.dx + size.width, offset.dy + baselineI);
@@ -2058,14 +2062,14 @@ abstract class RenderBox extends RenderObject {
       // alphabetic baseline
       final double baselineA = getDistanceToBaseline(TextBaseline.alphabetic, onlyReal: true);
       if (baselineA != null) {
-        paint.color = debugPaintAlphabeticBaselineColor;
+        paint.color = const Color(0xFF00FF00);
         path = new Path();
         path.moveTo(offset.dx, offset.dy + baselineA);
         path.lineTo(offset.dx + size.width, offset.dy + baselineA);
         context.canvas.drawPath(path, paint);
       }
       return true;
-    });
+    }());
   }
 
   /// In debug mode, paints a rectangle if this render box has counted more
@@ -2080,17 +2084,17 @@ abstract class RenderBox extends RenderObject {
     assert(() {
       if (_debugActivePointers > 0) {
         final Paint paint = new Paint()
-         ..color = new Color(debugPaintPointersColorValue | ((0x04000000 * depth) & 0xFF000000));
+         ..color = new Color(0x00BBBB | ((0x04000000 * depth) & 0xFF000000));
         context.canvas.drawRect(offset & size, paint);
       }
       return true;
-    });
+    }());
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
-    description.add(new DiagnosticsProperty<Size>('size', _size, ifNull: 'MISSING'));
+    description.add(new DiagnosticsProperty<Size>('size', _size, missingIfNull: true));
   }
 }
 
@@ -2149,6 +2153,11 @@ abstract class RenderBoxContainerDefaultsMixin<ChildType extends RenderBox, Pare
   ///
   /// Stops walking once after the first child reports that it contains the
   /// given point. Returns whether any children contain the given point.
+  ///
+  /// See also:
+  ///
+  ///  * [defaultPaint], which paints the children appropriate for this
+  ///    hit-testing strategy.
   bool defaultHitTestChildren(HitTestResult result, { Offset position }) {
     // the x, y parameters have the top left of the node's box as the origin
     ChildType child = lastChild;
@@ -2162,6 +2171,11 @@ abstract class RenderBoxContainerDefaultsMixin<ChildType extends RenderBox, Pare
   }
 
   /// Paints each child by walking the child list forwards.
+  ///
+  /// See also:
+  ///
+  ///  * [defaultHitTestChildren], which implements hit-testing of the children
+  ///    in a manner appropriate for this painting strategy.
   void defaultPaint(PaintingContext context, Offset offset) {
     ChildType child = firstChild;
     while (child != null) {

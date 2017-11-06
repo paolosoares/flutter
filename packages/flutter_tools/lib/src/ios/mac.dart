@@ -70,6 +70,28 @@ class IMobileDevice {
     return await exitsHappyAsync(<String>['idevicename']);
   }
 
+  Future<String> getAvailableDeviceIDs() async {
+    try {
+      final ProcessResult result = await processManager.run(<String>['idevice_id', '-l']);
+      if (result.exitCode != 0)
+        throw new ToolExit('idevice_id returned an error:\n${result.stderr}');
+      return result.stdout;
+    } on ProcessException {
+      throw new ToolExit('Failed to invoke idevice_id. Run flutter doctor.');
+    }
+  }
+
+  Future<String> getInfoForDevice(String deviceID, String key) async {
+    try {
+      final ProcessResult result = await processManager.run(<String>['ideviceinfo', '-u', deviceID, '-k', key, '--simple']);
+      if (result.exitCode != 0)
+        throw new ToolExit('idevice_id returned an error:\n${result.stderr}');
+      return result.stdout.trim();
+    } on ProcessException {
+      throw new ToolExit('Failed to invoke idevice_id. Run flutter doctor.');
+    }
+  }
+
   /// Starts `idevicesyslog` and returns the running process.
   Future<Process> startLogger() => runCommand(<String>['idevicesyslog']);
 
@@ -164,48 +186,6 @@ class Xcode {
       return false;
     return _xcodeVersionCheckValid(xcodeMajorVersion, xcodeMinorVersion);
   }
-
-  final RegExp _processRegExp = new RegExp(r'^(\S+)\s+1\s+(\d+)\s+(.+)$');
-
-  /// Kills any orphaned Instruments processes belonging to the user.
-  ///
-  /// In some cases, we've seen interactions between Instruments and the iOS
-  /// simulator that cause hung instruments and DTServiceHub processes. If
-  /// enough instances pile up, the host machine eventually becomes
-  /// unresponsive. Until the underlying issue is resolved, manually kill any
-  /// orphaned instances (where the parent process has died and PPID is 1)
-  /// before launching another instruments run.
-  Future<Null> _killOrphanedInstrumentsProcesses() async {
-    final ProcessResult result = await processManager.run(<String>['ps', '-e', '-o', 'user,ppid,pid,comm']);
-    if (result.exitCode != 0)
-      return;
-    for (String line in result.stdout.split('\n')) {
-      final Match match = _processRegExp.firstMatch(line.trim());
-      if (match == null || match[1] != platform.environment['USER'])
-        continue;
-      if (<String>['/instruments', '/DTServiceHub'].any(match[3].endsWith)) {
-        try {
-          printTrace('Killing orphaned Instruments process: ${match[2]}');
-          processManager.killPid(int.parse(match[2]));
-        } catch (_) {
-          printTrace('Failed to kill orphaned Instruments process:\n$line');
-        }
-      }
-    }
-  }
-
-  Future<String> getAvailableDevices() async {
-    await _killOrphanedInstrumentsProcesses();
-    try {
-      final ProcessResult result = await processManager.run(
-          <String>['/usr/bin/instruments', '-s', 'devices']);
-      if (result.exitCode != 0)
-        throw new ToolExit('/usr/bin/instruments returned an error:\n${result.stderr}');
-      return result.stdout;
-    } on ProcessException {
-      throw new ToolExit('Failed to invoke /usr/bin/instruments. Is Xcode installed?');
-    }
-  }
 }
 
 bool _xcodeVersionCheckValid(int major, int minor) {
@@ -220,7 +200,7 @@ bool _xcodeVersionCheckValid(int major, int minor) {
 
 Future<XcodeBuildResult> buildXcodeProject({
   BuildableIOSApp app,
-  BuildMode mode,
+  BuildInfo buildInfo,
   String target: flx.defaultMainPath,
   bool buildForDevice,
   bool codesign: true,
@@ -231,6 +211,35 @@ Future<XcodeBuildResult> buildXcodeProject({
 
   if (!kPythonSix.isInstalled) {
     printError(kPythonSix.errorMessage);
+    return new XcodeBuildResult(success: false);
+  }
+
+  final XcodeProjectInfo projectInfo = new XcodeProjectInfo.fromProjectSync(app.appDirectory);
+  if (!projectInfo.targets.contains('Runner')) {
+    printError('The Xcode project does not define target "Runner" which is needed by Flutter tooling.');
+    printError('Open Xcode to fix the problem:');
+    printError('  open ios/Runner.xcworkspace');
+    return new XcodeBuildResult(success: false);
+  }
+  final String scheme = projectInfo.schemeFor(buildInfo);
+  if (scheme == null) {
+    printError('');
+    if (projectInfo.definesCustomSchemes) {
+      printError('The Xcode project defines schemes: ${projectInfo.schemes.join(', ')}');
+      printError('You must specify a --flavor option to select one of them.');
+    } else {
+      printError('The Xcode project does not define custom schemes.');
+      printError('You cannot use the --flavor option.');
+    }
+    return new XcodeBuildResult(success: false);
+  }
+  final String configuration = projectInfo.buildConfigurationFor(buildInfo, scheme);
+  if (configuration == null) {
+    printError('');
+    printError('The Xcode project defines build configurations: ${projectInfo.buildConfigurations.join(', ')}');
+    printError('Flutter expects a build configuration named ${XcodeProjectInfo.expectedBuildConfigurationFor(buildInfo, scheme)} or similar.');
+    printError('Open Xcode to fix the problem:');
+    printError('  open ios/Runner.xcworkspace');
     return new XcodeBuildResult(success: false);
   }
 
@@ -247,13 +256,13 @@ Future<XcodeBuildResult> buildXcodeProject({
   if (hasFlutterPlugins)
     await cocoaPods.processPods(
       appIosDir: appDirectory,
-      iosEngineDir: flutterFrameworkDir(mode),
+      iosEngineDir: flutterFrameworkDir(buildInfo.mode),
       isSwift: app.isSwift,
     );
 
   updateXcodeGeneratedProperties(
     projectPath: fs.currentDirectory.path,
-    mode: mode,
+    buildInfo: buildInfo,
     target: target,
     hasPlugins: hasFlutterPlugins
   );
@@ -264,7 +273,7 @@ Future<XcodeBuildResult> buildXcodeProject({
     'xcodebuild',
     'clean',
     'build',
-    '-configuration', 'Release',
+    '-configuration', configuration,
     'ONLY_ACTIVE_ARCH=YES',
   ];
 
@@ -276,8 +285,8 @@ Future<XcodeBuildResult> buildXcodeProject({
     if (fs.path.extension(entity.path) == '.xcworkspace') {
       commands.addAll(<String>[
         '-workspace', fs.path.basename(entity.path),
-        '-scheme', fs.path.basenameWithoutExtension(entity.path),
-        "BUILD_DIR=${fs.path.absolute(getIosBuildDirectory())}",
+        '-scheme', scheme,
+        'BUILD_DIR=${fs.path.absolute(getIosBuildDirectory())}',
       ]);
       break;
     }
@@ -306,7 +315,6 @@ Future<XcodeBuildResult> buildXcodeProject({
     allowReentrantFlutter: true
   );
   status.stop();
-
   if (result.exitCode != 0) {
     printStatus('Failed to build iOS app');
     if (result.stderr.isNotEmpty) {
@@ -328,13 +336,18 @@ Future<XcodeBuildResult> buildXcodeProject({
       ),
     );
   } else {
-    // Look for 'clean build/Release-iphoneos/Runner.app'.
-    final RegExp regexp = new RegExp(r' clean (\S*\.app)$', multiLine: true);
+    // Look for 'clean build/<configuration>-<sdk>/Runner.app'.
+    final RegExp regexp = new RegExp(r' clean (.*\.app)$', multiLine: true);
     final Match match = regexp.firstMatch(result.stdout);
     String outputDir;
-    if (match != null)
-      outputDir = fs.path.join(app.appDirectory, match.group(1));
-    return new XcodeBuildResult(success:true, output: outputDir);
+    if (match != null) {
+      final String actualOutputDir = match.group(1).replaceAll('\\ ', ' ');
+      // Copy app folder to a place where other tools can find it without knowing
+      // the BuildInfo.
+      outputDir = actualOutputDir.replaceFirst('/$configuration-', '/');
+      copyDirectorySync(fs.directory(actualOutputDir), fs.directory(outputDir));
+    }
+    return new XcodeBuildResult(success: true, output: outputDir);
   }
 }
 
@@ -356,7 +369,9 @@ Future<Null> diagnoseXcodeBuildFailure(XcodeBuildResult result, BuildableIOSApp 
     printError(noDevelopmentTeamInstruction, emphasis: true);
     return;
   }
-  if (app.id?.contains('com.yourcompany') ?? false) {
+  if (result.xcodeBuildExecution != null &&
+      result.xcodeBuildExecution.buildForPhysicalDevice &&
+      app.id?.contains('com.yourcompany') ?? false) {
     printError('');
     printError('It appears that your application still contains the default signing identifier.');
     printError("Try replacing 'com.yourcompany' with your signing id in Xcode:");
@@ -432,20 +447,20 @@ bool _checkXcodeVersion() {
 
 Future<Null> _addServicesToBundle(Directory bundle) async {
   final List<Map<String, String>> services = <Map<String, String>>[];
-  printTrace("Trying to resolve native pub services.");
+  printTrace('Trying to resolve native pub services.');
 
   // Step 1: Parse the service configuration yaml files present in the service
   //         pub packages.
   await parseServiceConfigs(services);
-  printTrace("Found ${services.length} service definition(s).");
+  printTrace('Found ${services.length} service definition(s).');
 
   // Step 2: Copy framework dylibs to the correct spot for xcodebuild to pick up.
-  final Directory frameworksDirectory = fs.directory(fs.path.join(bundle.path, "Frameworks"));
+  final Directory frameworksDirectory = fs.directory(fs.path.join(bundle.path, 'Frameworks'));
   await _copyServiceFrameworks(services, frameworksDirectory);
 
   // Step 3: Copy the service definitions manifest at the correct spot for
   //         xcodebuild to pick up.
-  final File manifestFile = fs.file(fs.path.join(bundle.path, "ServiceDefinitions.json"));
+  final File manifestFile = fs.file(fs.path.join(bundle.path, 'ServiceDefinitions.json'));
   _copyServiceDefinitionsManifest(services, manifestFile);
 }
 
@@ -455,7 +470,7 @@ Future<Null> _copyServiceFrameworks(List<Map<String, String>> services, Director
   for (Map<String, String> service in services) {
     final String dylibPath = await getServiceFromUrl(service['ios-framework'], service['root'], service['name']);
     final File dylib = fs.file(dylibPath);
-    printTrace("Copying ${dylib.path} into bundle.");
+    printTrace('Copying ${dylib.path} into bundle.');
     if (!dylib.existsSync()) {
       printError("The service dylib '${dylib.path}' does not exist.");
       continue;

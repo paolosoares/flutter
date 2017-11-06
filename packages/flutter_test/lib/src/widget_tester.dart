@@ -36,13 +36,15 @@ typedef Future<Null> WidgetTesterCallback(WidgetTester widgetTester);
 /// provides convenient widget [Finder]s for use with the
 /// [WidgetTester].
 ///
-/// Example:
+/// ## Sample code
 ///
+/// ```dart
 ///     testWidgets('MyWidget', (WidgetTester tester) async {
 ///       await tester.pumpWidget(new MyWidget());
 ///       await tester.tap(find.text('Save'));
-///       expect(tester, hasWidget(find.text('Success')));
+///       expect(find.text('Success'), findsOneWidget);
 ///     });
+/// ```
 void testWidgets(String description, WidgetTesterCallback callback, {
   bool skip: false,
   test_package.Timeout timeout
@@ -115,7 +117,7 @@ Future<Null> benchmarkWidgets(WidgetTesterCallback callback) {
     print('│                                                        ');
     print('└─────────────────────────────────────────────────╌┄┈  🐢');
     return true;
-  });
+  }());
   final TestWidgetsFlutterBinding binding = TestWidgetsFlutterBinding.ensureInitialized();
   assert(binding is! AutomatedTestWidgetsFlutterBinding);
   final WidgetTester tester = new WidgetTester._(binding);
@@ -132,9 +134,10 @@ Future<Null> benchmarkWidgets(WidgetTesterCallback callback) {
 /// that have not yet resolved.
 void expect(dynamic actual, dynamic matcher, {
   String reason,
+  dynamic skip, // true or a String
 }) {
   TestAsyncUtils.guardSync();
-  test_package.expect(actual, matcher, reason: reason);
+  test_package.expect(actual, matcher, reason: reason, skip: skip);
 }
 
 /// Assert that `actual` matches `matcher`.

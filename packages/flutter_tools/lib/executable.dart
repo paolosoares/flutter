@@ -24,6 +24,7 @@ import 'src/cache.dart';
 import 'src/commands/analyze.dart';
 import 'src/commands/build.dart';
 import 'src/commands/channel.dart';
+import 'src/commands/clean.dart';
 import 'src/commands/config.dart';
 import 'src/commands/create.dart';
 import 'src/commands/daemon.dart';
@@ -68,6 +69,7 @@ Future<Null> main(List<String> args) async {
     new AnalyzeCommand(verboseHelp: verboseHelp),
     new BuildCommand(verboseHelp: verboseHelp),
     new ChannelCommand(),
+    new CleanCommand(),
     new ConfigCommand(verboseHelp: verboseHelp),
     new CreateCommand(),
     new DaemonCommand(hidden: !verboseHelp),
@@ -118,6 +120,7 @@ Future<int> run(List<String> args, List<FlutterCommand> subCommands, {
     // in those locations as well to see if you need a similar update there.
 
     // Seed these context entries first since others depend on them
+    context.putIfAbsent(Stdio, () => const Stdio());
     context.putIfAbsent(Platform, () => const LocalPlatform());
     context.putIfAbsent(FileSystem, () => const LocalFileSystem());
     context.putIfAbsent(ProcessManager, () => const LocalProcessManager());
@@ -172,7 +175,7 @@ Future<int> _handleToolError(
     writelnStderr();
     writelnStderr(
         "Run 'flutter -h' (or 'flutter <command> -h') for available "
-            "flutter commands and options."
+            'flutter commands and options.'
     );
     // Argument error exit code.
     return _exit(64);

@@ -75,12 +75,12 @@ class ImageIcon extends StatelessWidget {
       height: iconSize,
       color: iconColor,
       fit: BoxFit.scaleDown,
-      alignment: FractionalOffset.center
+      alignment: Alignment.center,
     );
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<ImageProvider>('image', image, ifNull: '<empty>', showName: false));
     description.add(new DoubleProperty('size', size, defaultValue: null));

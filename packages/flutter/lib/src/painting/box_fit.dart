@@ -98,9 +98,9 @@ class FittedSizes {
 /// This method does not express an opinion regarding the alignment of the
 /// source and destination sizes within the input and output rectangles.
 /// Typically they are centered (this is what [BoxDecoration] does, for
-/// instance, and is how [BoxFit] is defined). The [FractionalOffset] class
-/// provides a convenience function, [FractionalOffset.inscribe], for resolving
-/// the sizes to rects, as shown in the example below.
+/// instance, and is how [BoxFit] is defined). The [Alignment] class provides a
+/// convenience function, [Alignment.inscribe], for resolving the sizes to
+/// rects, as shown in the example below.
 ///
 /// ## Sample code
 ///
@@ -112,8 +112,8 @@ class FittedSizes {
 /// void paintImage(ui.Image image, Rect outputRect, Canvas canvas, Paint paint, BoxFit fit) {
 ///   final Size imageSize = new Size(image.width.toDouble(), image.height.toDouble());
 ///   final FittedSizes sizes = applyBoxFit(fit, imageSize, outputRect.size);
-///   final Rect inputSubrect = FractionalOffset.center.inscribe(sizes.source, Offset.zero & imageSize);
-///   final Rect outputSubrect = FractionalOffset.center.inscribe(sizes.destination, outputRect);
+///   final Rect inputSubrect = Alignment.center.inscribe(sizes.source, Offset.zero & imageSize);
+///   final Rect outputSubrect = Alignment.center.inscribe(sizes.destination, outputRect);
 ///   canvas.drawImageRect(image, inputSubrect, outputSubrect, paint);
 /// }
 /// ```
@@ -125,6 +125,9 @@ class FittedSizes {
 ///  * [DecoratedBox], [BoxDecoration], and [DecorationImage], which together
 ///    provide access to [paintImage] at the widgets layer.
 FittedSizes applyBoxFit(BoxFit fit, Size inputSize, Size outputSize) {
+  if (inputSize.height <= 0.0 || inputSize.width <= 0.0 || outputSize.height <= 0.0 || outputSize.width <= 0.0)
+    return const FittedSizes(Size.zero, Size.zero);
+
   Size sourceSize, destinationSize;
   switch (fit) {
     case BoxFit.fill:

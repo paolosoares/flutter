@@ -321,7 +321,7 @@ abstract class ServiceObject {
       return null;
 
     if (!_isServiceMap(map))
-      throw new VMServiceObjectLoadError("Expected a service map", map);
+      throw new VMServiceObjectLoadError('Expected a service map', map);
 
     final String type = _stripRef(map['type']);
 
@@ -435,7 +435,7 @@ abstract class ServiceObject {
     final String mapType = _stripRef(map['type']);
 
     if ((_type != null) && (_type != mapType)) {
-      throw new VMServiceObjectLoadError("ServiceObject types must not change",
+      throw new VMServiceObjectLoadError('ServiceObject types must not change',
                                          map);
     }
     _type = mapType;
@@ -443,7 +443,7 @@ abstract class ServiceObject {
 
     _canCache = map['fixedId'] == true;
     if ((_id != null) && (_id != map['id']) && _canCache) {
-      throw new VMServiceObjectLoadError("ServiceObject id changed", map);
+      throw new VMServiceObjectLoadError('ServiceObject id changed', map);
     }
     _id = map['id'];
 
@@ -636,7 +636,8 @@ class VM extends ServiceObjectOwner {
   void _removeDeadIsolates(List<Isolate> newIsolates) {
     // Build a set of new isolates.
     final Set<String> newIsolateSet = new Set<String>();
-    newIsolates.forEach((Isolate iso) => newIsolateSet.add(iso.id));
+    for (Isolate iso in newIsolates)
+      newIsolateSet.add(iso.id);
 
     // Remove any old isolates which no longer exist.
     final List<String> toRemove = <String>[];
@@ -736,6 +737,10 @@ class VM extends ServiceObjectOwner {
       return null;
     } on WebSocketChannelException catch (error) {
       throwToolExit('Error connecting to observatory: $error');
+      return null;
+    } on rpc.RpcException catch (error) {
+      printError('Error ${error.code} received from application: ${error.message}');
+      printTrace('${error.data}');
       return null;
     }
   }
@@ -897,6 +902,24 @@ class HeapSpace extends ServiceObject {
   }
 }
 
+// A function, field or class along with its source location.
+class ProgramElement {
+  ProgramElement(this.qualifiedName, this.uri, this.line, this.column);
+
+  final String qualifiedName;
+  final Uri uri;
+  final int line;
+  final int column;
+
+  @override
+  String toString() {
+    if (line == null)
+      return '$qualifiedName ($uri)';
+    else
+      return '$qualifiedName ($uri:$line)';
+  }
+}
+
 /// An isolate running inside the VM. Instances of the Isolate class are always
 /// canonicalized.
 class Isolate extends ServiceObjectOwner {
@@ -976,11 +999,9 @@ class Isolate extends ServiceObjectOwner {
   }
 
   void _updateHeaps(Map<String, dynamic> map, bool mapIsRef) {
-    if (_newSpace == null)
-      _newSpace = new HeapSpace._empty(this);
+    _newSpace ??= new HeapSpace._empty(this);
     _newSpace._update(map['new'], mapIsRef);
-    if (_oldSpace == null)
-      _oldSpace = new HeapSpace._empty(this);
+    _oldSpace ??= new HeapSpace._empty(this);
     _oldSpace._update(map['old'], mapIsRef);
   }
 
@@ -1029,6 +1050,58 @@ class Isolate extends ServiceObjectOwner {
     }
   }
 
+  Future<Map<String, dynamic>> getObject(Map<String, dynamic> objectRef) {
+    return invokeRpcRaw('getObject',
+                        params: <String, dynamic>{'objectId': objectRef['id']});
+  }
+
+  Future<ProgramElement> _describeElement(Map<String, dynamic> elementRef) async {
+    String name = elementRef['name'];
+    Map<String, dynamic> owner = elementRef['owner'];
+    while (owner != null) {
+      final String ownerType = owner['type'];
+      if (ownerType == 'Library' || ownerType == '@Library')
+        break;
+      final String ownerName = owner['name'];
+      name = '$ownerName.$name';
+      owner = owner['owner'];
+    }
+
+    final Map<String, dynamic> fullElement = await getObject(elementRef);
+    final Map<String, dynamic> location = fullElement['location'];
+    final int tokenPos = location['tokenPos'];
+    final Map<String, dynamic> script = await getObject(location['script']);
+
+    // The engine's tag handler doesn't seem to create proper URIs.
+    Uri uri = Uri.parse(script['uri']);
+    if (uri.scheme == '')
+      uri = uri.replace(scheme: 'file');
+
+    // See https://github.com/dart-lang/sdk/blob/master/runtime/vm/service/service.md
+    for (List<int> lineTuple in script['tokenPosTable']) {
+      final int line = lineTuple[0];
+      for (int i = 1; i < lineTuple.length; i += 2) {
+        if (lineTuple[i] == tokenPos) {
+          final int column = lineTuple[i + 1];
+          return new ProgramElement(name, uri, line, column);
+        }
+      }
+    }
+    return new ProgramElement(name, uri, null, null);
+  }
+
+  // Lists program elements changed in the most recent reload that have not
+  // since executed.
+  Future<List<ProgramElement>> getUnusedChangesInLastReload() async {
+    final Map<String, dynamic> response =
+      await invokeRpcRaw('_getUnusedChangesInLastReload');
+    final List<Future<ProgramElement>> unusedElements =
+      <Future<ProgramElement>>[];
+    for (Map<String, dynamic> element in response['unused'])
+      unusedElements.add(_describeElement(element));
+    return Future.wait(unusedElements);
+  }
+
   /// Resumes the isolate.
   Future<Map<String, dynamic>> resume() {
     return invokeRpcRaw('resume');
@@ -1069,8 +1142,12 @@ class Isolate extends ServiceObjectOwner {
     return invokeFlutterExtensionRpcRaw('ext.flutter.debugDumpLayerTree', timeout: kLongRequestTimeout);
   }
 
-  Future<Map<String, dynamic>> flutterDebugDumpSemanticsTree() {
-    return invokeFlutterExtensionRpcRaw('ext.flutter.debugDumpSemanticsTree', timeout: kLongRequestTimeout);
+  Future<Map<String, dynamic>> flutterDebugDumpSemanticsTreeInTraversalOrder() {
+    return invokeFlutterExtensionRpcRaw('ext.flutter.debugDumpSemanticsTreeInTraversalOrder', timeout: kLongRequestTimeout);
+  }
+
+  Future<Map<String, dynamic>> flutterDebugDumpSemanticsTreeInInverseHitTestOrder() {
+    return invokeFlutterExtensionRpcRaw('ext.flutter.debugDumpSemanticsTreeInInverseHitTestOrder', timeout: kLongRequestTimeout);
   }
 
   Future<Map<String, dynamic>> _flutterToggle(String name) async {
@@ -1089,6 +1166,8 @@ class Isolate extends ServiceObjectOwner {
   Future<Map<String, dynamic>> flutterToggleDebugPaintSizeEnabled() => _flutterToggle('debugPaint');
 
   Future<Map<String, dynamic>> flutterTogglePerformanceOverlayOverride() => _flutterToggle('showPerformanceOverlay');
+
+  Future<Map<String, dynamic>> flutterToggleWidgetInspector()  => _flutterToggle('debugWidgetInspector');
 
   Future<Null> flutterDebugAllowBanner(bool show) async {
     await invokeFlutterExtensionRpcRaw(

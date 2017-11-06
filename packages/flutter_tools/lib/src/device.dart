@@ -191,7 +191,7 @@ abstract class Device {
 
   // String meant to be displayed to the user indicating if the device is
   // supported by Flutter, and, if not, why.
-  String supportMessage() => isSupported() ? "Supported" : "Unsupported";
+  String supportMessage() => isSupported() ? 'Supported' : 'Unsupported';
 
   /// The device's platform.
   Future<TargetPlatform> get targetPlatform;
@@ -235,13 +235,11 @@ abstract class Device {
   /// for iOS device deployment. Set to false if stdin cannot be read from while
   /// attempting to start the app.
   Future<LaunchResult> startApp(
-    ApplicationPackage package,
-    BuildMode mode, {
+    ApplicationPackage package, {
     String mainPath,
     String route,
     DebuggingOptions debuggingOptions,
     Map<String, dynamic> platformArgs,
-    String kernelPath,
     bool prebuiltApplication: false,
     bool applicationNeedsRebuild: false,
     bool usesTerminalUi: true,
@@ -316,30 +314,30 @@ abstract class Device {
 }
 
 class DebuggingOptions {
-  DebuggingOptions.enabled(this.buildMode, {
+  DebuggingOptions.enabled(this.buildInfo, {
     this.startPaused: false,
     this.enableSoftwareRendering: false,
+    this.traceSkia: false,
     this.useTestFonts: false,
     this.observatoryPort,
-    this.diagnosticPort
    }) : debuggingEnabled = true;
 
-  DebuggingOptions.disabled(this.buildMode) :
+  DebuggingOptions.disabled(this.buildInfo) :
     debuggingEnabled = false,
     useTestFonts = false,
     startPaused = false,
     enableSoftwareRendering = false,
-    observatoryPort = null,
-    diagnosticPort = null;
+    traceSkia = false,
+    observatoryPort = null;
 
   final bool debuggingEnabled;
 
-  final BuildMode buildMode;
+  final BuildInfo buildInfo;
   final bool startPaused;
   final bool enableSoftwareRendering;
+  final bool traceSkia;
   final bool useTestFonts;
   final int observatoryPort;
-  final int diagnosticPort;
 
   bool get hasObservatoryPort => observatoryPort != null;
 
@@ -350,35 +348,22 @@ class DebuggingOptions {
       return new Future<int>.value(observatoryPort);
     return portScanner.findPreferredPort(observatoryPort ?? kDefaultObservatoryPort);
   }
-
-  bool get hasDiagnosticPort => diagnosticPort != null;
-
-  /// Return the user specified diagnostic port. If that isn't available,
-  /// return [kDefaultDiagnosticPort], or a port close to that one.
-  Future<int> findBestDiagnosticPort() {
-    if (hasDiagnosticPort)
-      return new Future<int>.value(diagnosticPort);
-    return portScanner.findPreferredPort(diagnosticPort ?? kDefaultDiagnosticPort);
-  }
 }
 
 class LaunchResult {
-  LaunchResult.succeeded({ this.observatoryUri, this.diagnosticUri }) : started = true;
-  LaunchResult.failed() : started = false, observatoryUri = null, diagnosticUri = null;
+  LaunchResult.succeeded({ this.observatoryUri }) : started = true;
+  LaunchResult.failed() : started = false, observatoryUri = null;
 
   bool get hasObservatory => observatoryUri != null;
 
   final bool started;
   final Uri observatoryUri;
-  final Uri diagnosticUri;
 
   @override
   String toString() {
     final StringBuffer buf = new StringBuffer('started=$started');
     if (observatoryUri != null)
       buf.write(', observatory=$observatoryUri');
-    if (diagnosticUri != null)
-      buf.write(', diagnostic=$diagnosticUri');
     return buf.toString();
   }
 }
@@ -426,8 +411,7 @@ abstract class DeviceLogReader {
 
 /// Describes an app running on the device.
 class DiscoveredApp {
-  DiscoveredApp(this.id, this.observatoryPort, this.diagnosticPort);
+  DiscoveredApp(this.id, this.observatoryPort);
   final String id;
   final int observatoryPort;
-  final int diagnosticPort;
 }

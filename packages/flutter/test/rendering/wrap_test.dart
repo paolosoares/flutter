@@ -10,11 +10,11 @@ void main() {
     final RenderWrap renderWrap = new RenderWrap();
     expect(renderWrap, hasAGoodToStringDeep);
     expect(
-      renderWrap.toStringDeep(),
+      renderWrap.toStringDeep(minLevel: DiagnosticLevel.info),
       equalsIgnoringHashCodes(
         'RenderWrap#00000 NEEDS-LAYOUT NEEDS-PAINT DETACHED\n'
-        '   parentData: null\n'
-        '   constraints: null\n'
+        '   parentData: MISSING\n'
+        '   constraints: MISSING\n'
         '   size: MISSING\n'
         '   direction: horizontal\n'
         '   alignment: start\n'

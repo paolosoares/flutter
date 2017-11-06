@@ -142,11 +142,12 @@ Future<String> getCodeSigningIdentityDevelopmentTeam({BuildableIOSApp iosApp, bo
       ..close();
 
   final String opensslOutput = await UTF8.decodeStream(opensslProcess.stdout);
-  opensslProcess.stderr.drain<String>();
+  // Fire and forget discard of the stderr stream so we don't hold onto resources.
+  // Don't care about the result.
+  opensslProcess.stderr.drain<String>(); // ignore: unawaited_futures
 
-  if (await opensslProcess.exitCode != 0) {
+  if (await opensslProcess.exitCode != 0)
     return null;
-  }
 
   return _certificateOrganizationalUnitExtractionPattern
       .firstMatch(opensslOutput)
@@ -203,7 +204,7 @@ Future<String> _chooseSigningIdentity(List<String> validCodeSigningIdentities, b
       throwToolExit('Aborted. Code signing is required to build a deployable iOS app.');
     } else {
       final String selectedCert = validCodeSigningIdentities[int.parse(choice) - 1];
-      printStatus('Certificate choice "$savedCertChoice" saved');
+      printStatus('Certificate choice "$selectedCert" saved');
       config.setValue('ios-signing-cert', selectedCert);
       return selectedCert;
     }

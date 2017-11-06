@@ -14,6 +14,7 @@ import 'icons.dart';
 import 'ink_well.dart';
 import 'list_tile.dart';
 import 'material.dart';
+import 'material_localizations.dart';
 import 'theme.dart';
 
 // Examples can assume:
@@ -446,7 +447,7 @@ class _PopupMenu<T> extends StatelessWidget {
             type: MaterialType.card,
             elevation: route.elevation,
             child: new Align(
-              alignment: FractionalOffset.topRight,
+              alignment: Alignment.topRight,
               widthFactor: width.evaluate(route.animation),
               heightFactor: height.evaluate(route.animation),
               child: child,
@@ -674,7 +675,7 @@ class PopupMenuButton<T> extends StatefulWidget {
     @required this.itemBuilder,
     this.initialValue,
     this.onSelected,
-    this.tooltip: 'Show menu',
+    this.tooltip,
     this.elevation: 8.0,
     this.padding: const EdgeInsets.all(8.0),
     this.child,
@@ -707,7 +708,7 @@ class PopupMenuButton<T> extends StatefulWidget {
   /// Matches IconButton's 8 dps padding by default. In some cases, notably where
   /// this button appears as the trailing element of a list item, it's useful to be able
   /// to set the padding to zero.
-  final EdgeInsets padding;
+  final EdgeInsetsGeometry padding;
 
   /// If provided, the widget used for this button.
   final Widget child;
@@ -765,7 +766,7 @@ class _PopupMenuButtonState<T> extends State<PopupMenuButton<T>> {
       : new IconButton(
           icon: widget.icon ?? _getIcon(Theme.of(context).platform),
           padding: widget.padding,
-          tooltip: widget.tooltip,
+          tooltip: widget.tooltip ?? MaterialLocalizations.of(context).showMenuTooltip,
           onPressed: showButtonMenu,
         );
   }

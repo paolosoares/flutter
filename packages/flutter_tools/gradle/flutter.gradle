@@ -157,6 +157,9 @@ class FlutterPlugin implements Plugin<Project> {
     }
 
     private void addFlutterJarProvidedDependency(Project project) {
+        if (project.state.failure) {
+            return
+        }
         project.dependencies {
             if (flutterJar != null) {
                 provided project.files(flutterJar)
@@ -204,6 +207,9 @@ class FlutterPlugin implements Plugin<Project> {
     }
 
     private void addFlutterTask(Project project) {
+        if (project.state.failure) {
+            return
+        }
         if (project.flutter.source == null) {
             throw new GradleException("Must provide Flutter source directory")
         }
@@ -216,20 +222,29 @@ class FlutterPlugin implements Plugin<Project> {
             target = project.property('target')
         }
 
-        File kernel
-        if (project.hasProperty('kernel')) {
-            kernel = project.file(project.property('kernel'))
+        Boolean previewDart2Value = false
+        if (project.hasProperty('preview-dart-2')) {
+            previewDart2Value = project.property('preview-dart-2')
+        }
+
+        String extraFrontEndOptionsValue = null
+        if (project.hasProperty('extra-front-end-options')) {
+            extraFrontEndOptionsValue = project.property('extra-front-end-options')
+        }
+        String extraGenSnapshotOptionsValue = null
+        if (project.hasProperty('extra-gen-snapshot-options')) {
+            extraGenSnapshotOptionsValue = project.property('extra-gen-snapshot-options')
         }
 
         project.android.applicationVariants.all { variant ->
-            if (project.tasks.findByName('flutterBuildX86Jar')) {
+            String flutterBuildMode = buildModeFor(variant.buildType)
+            if (flutterBuildMode == 'debug' && project.tasks.findByName('flutterBuildX86Jar')) {
                 Task task = project.tasks.findByName("compile${variant.name.capitalize()}JavaWithJavac")
                 if (task) {
                     task.dependsOn project.flutterBuildX86Jar
                 }
             }
 
-            String flutterBuildMode = buildModeFor(variant.buildType)
             GenerateDependencies dependenciesTask = project.tasks.create(name: "flutterDependencies${variant.name.capitalize()}", type: GenerateDependencies) {
                 flutterRoot this.flutterRoot
                 flutterExecutable this.flutterExecutable
@@ -237,7 +252,7 @@ class FlutterPlugin implements Plugin<Project> {
                 localEngine this.localEngine
                 localEngineSrcPath this.localEngineSrcPath
                 targetPath target
-                kernelFile kernel
+                previewDart2 previewDart2Value
                 sourceDir project.file(project.flutter.source)
                 intermediateDir project.file("${project.buildDir}/${AndroidProject.FD_INTERMEDIATES}/flutter/${variant.name}")
             }
@@ -250,9 +265,11 @@ class FlutterPlugin implements Plugin<Project> {
                 localEngine this.localEngine
                 localEngineSrcPath this.localEngineSrcPath
                 targetPath target
-                kernelFile kernel
+                previewDart2 previewDart2Value
                 sourceDir project.file(project.flutter.source)
                 intermediateDir project.file("${project.buildDir}/${AndroidProject.FD_INTERMEDIATES}/flutter/${variant.name}")
+                extraFrontEndOptions extraFrontEndOptionsValue
+                extraGenSnapshotOptions extraGenSnapshotOptionsValue
             }
 
             Task copyFlxTask = project.tasks.create(name: "copyFlutterAssets${variant.name.capitalize()}", type: Copy) {
@@ -279,10 +296,14 @@ abstract class BaseFlutterTask extends DefaultTask {
     String localEngineSrcPath
     @Input
     String targetPath
-    @Optional @InputFile
-    File kernelFile
+    @Optional @Input
+    Boolean previewDart2
     File sourceDir
     File intermediateDir
+    @Optional @Input
+    String extraFrontEndOptions
+    @Optional @Input
+    String extraGenSnapshotOptions
 
     @OutputFile
     File getDependenciesFile() {
@@ -313,6 +334,15 @@ abstract class BaseFlutterTask extends DefaultTask {
                 args "--target", targetPath
                 args "--target-platform", "android-arm"
                 args "--output-dir", "${intermediateDir}"
+                if (previewDart2) {
+                    args "--preview-dart-2"
+                }
+                if (extraFrontEndOptions != null) {
+                  args "--extra-front-end-options", "${extraFrontEndOptions}"
+                }
+                if (extraGenSnapshotOptions != null) {
+                  args "--extra-gen-snapshot-options", "${extraGenSnapshotOptions}"
+                }
                 args "--${buildMode}"
             }
         }
@@ -327,15 +357,17 @@ abstract class BaseFlutterTask extends DefaultTask {
             args "build", "flx"
             args "--suppress-analytics"
             args "--target", targetPath
-            if (kernelFile != null) {
-                args "--kernel", kernelFile.absolutePath
+            if (previewDart2) {
+                args "--preview-dart-2"
             }
             args "--output-file", "${intermediateDir}/app.flx"
             if (buildMode != "debug") {
                 args "--precompiled"
             } else {
-                args "--snapshot", "${intermediateDir}/snapshot_blob.bin"
-                args "--depfile", "${intermediateDir}/snapshot_blob.bin.d"
+                if (!previewDart2) {
+                    args "--snapshot", "${intermediateDir}/snapshot_blob.bin"
+                    args "--depfile", "${intermediateDir}/snapshot_blob.bin.d"
+                }
             }
             args "--working-dir", "${intermediateDir}/flx"
         }
@@ -360,7 +392,8 @@ class FlutterTask extends BaseFlutterTask {
 
     CopySpec getAssets() {
         return project.copySpec {
-            from "${intermediateDir}/app.flx"
+	     from "${intermediateDir}/app.flx"
+	     from "${intermediateDir}/snapshot_blob.bin"
             if (buildMode != 'debug') {
                 from "${intermediateDir}/vm_snapshot_data"
                 from "${intermediateDir}/vm_snapshot_instr"
@@ -394,6 +427,9 @@ class FlutterTask extends BaseFlutterTask {
             FileCollection snapshotter = readDependencies(project.file("${intermediateDir}/gen_snapshot.d"))
             if (snapshotter != null) {
                 sources = sources.plus(snapshotter)
+            }
+            if (localEngineSrcPath != null) {
+                sources = sources.plus(project.files("$localEngineSrcPath/$localEngine"))
             }
             // Finally, add a dependency on pubspec.yaml as well.
             return sources.plus(project.files('pubspec.yaml'))

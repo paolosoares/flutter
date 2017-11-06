@@ -178,28 +178,8 @@ abstract class Route<T> {
   @mustCallSuper
   @protected
   void dispose() {
-    assert(() {
-      if (navigator == null) {
-        throw new FlutterError(
-          '$runtimeType.dipose() called more than once.\n'
-          'A given route cannot be disposed more than once.'
-        );
-      }
-      return true;
-    });
     _navigator = null;
   }
-
-  /// If the route's transition can be popped via a user gesture (e.g. the iOS
-  /// back gesture), this should return a controller object that can be used to
-  /// control the transition animation's progress. Otherwise, it should return
-  /// null.
-  ///
-  /// If attempts to dismiss this route might be vetoed, for example because
-  /// a [WillPopCallback] was defined for the route, then it may make sense
-  /// to disable the pop gesture. For example, the iOS back gesture is disabled
-  /// when [ModalRoute.hasScopedWillPopCallback] is true.
-  NavigationGestureController startPopGesture() => null;
 
   /// Whether this route is the top-most route on the navigator.
   ///
@@ -288,54 +268,16 @@ class NavigatorObserver {
   /// The [Navigator] removed `route`.
   void didRemove(Route<dynamic> route, Route<dynamic> previousRoute) { }
 
-  /// The [Navigator] is being controlled by a user gesture.
+  /// The [Navigator]'s routes are being moved by a user gesture.
   ///
-  /// Used for the iOS back gesture.
+  /// For example, this is called when an iOS back gesture starts, and is used
+  /// to disabled hero animations during such interactions.
   void didStartUserGesture() { }
 
   /// User gesture is no longer controlling the [Navigator].
+  ///
+  /// Paired with an earlier call to [didStartUserGesture].
   void didStopUserGesture() { }
-}
-
-/// Interface describing an object returned by the [Route.startPopGesture]
-/// method, allowing the route's transition animations to be controlled by a
-/// drag or other user gesture.
-abstract class NavigationGestureController {
-  /// Configures the NavigationGestureController and tells the given [Navigator] that
-  /// a gesture has started.
-  NavigationGestureController(this._navigator)
-    : assert(_navigator != null) {
-    // Disable Hero transitions until the gesture is complete.
-    _navigator.didStartUserGesture();
-  }
-
-  /// The navigator that this object is controlling.
-  @protected
-  NavigatorState get navigator => _navigator;
-  NavigatorState _navigator;
-
-  /// Release the resources used by this object. The object is no longer usable
-  /// after this method is called.
-  ///
-  /// Must be called when the gesture is done.
-  ///
-  /// Calling this method notifies the navigator that the gesture has completed.
-  @mustCallSuper
-  void dispose() {
-    _navigator.didStopUserGesture();
-    _navigator = null;
-  }
-
-  /// The drag gesture has changed by [fractionalDelta]. The total range of the
-  /// drag should be 0.0 to 1.0.
-  void dragUpdate(double fractionalDelta);
-
-  /// The drag gesture has ended with a horizontal motion of
-  /// [fractionalVelocity] as a fraction of screen width per second.
-  ///
-  /// Returns true if the gesture will complete (i.e. a back gesture will
-  /// result in a pop).
-  bool dragEnd(double fractionalVelocity);
 }
 
 /// Signature for the [Navigator.popUntil] predicate argument.
@@ -766,8 +708,17 @@ class Navigator extends StatefulWidget {
   ///   ..pop()
   ///   ..pushNamed('/settings');
   /// ```
-  static NavigatorState of(BuildContext context) {
-    final NavigatorState navigator = context.ancestorStateOfType(const TypeMatcher<NavigatorState>());
+  ///
+  /// If `rootNavigator` is set to true, the state from the furthest instance of
+  /// this class is given instead. Useful for pushing contents above all subsequent
+  /// instances of [Navigator].
+  static NavigatorState of(
+    BuildContext context, {
+      bool rootNavigator: false
+    }) {
+    final NavigatorState navigator = rootNavigator
+        ? context.rootAncestorStateOfType(const TypeMatcher<NavigatorState>())
+        : context.ancestorStateOfType(const TypeMatcher<NavigatorState>());
     assert(() {
       if (navigator == null) {
         throw new FlutterError(
@@ -776,7 +727,7 @@ class Navigator extends StatefulWidget {
         );
       }
       return true;
-    });
+    }());
     return navigator;
   }
 
@@ -837,18 +788,16 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
             ),
           );
           return true;
-        });
+        }());
         push(_routeNamed(Navigator.defaultRouteName));
       } else {
-        for (Route<dynamic> route in plannedInitialRoutes)
-          push(route);
+        plannedInitialRoutes.forEach(push);
       }
     } else {
       Route<dynamic> route;
       if (initialRouteName != Navigator.defaultRouteName)
         route = _routeNamed(initialRouteName, allowNull: true);
-      if (route == null)
-        route = _routeNamed(Navigator.defaultRouteName);
+      route ??= _routeNamed(Navigator.defaultRouteName);
       push(route);
     }
     for (Route<dynamic> route in _history)
@@ -871,7 +820,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
   @override
   void dispose() {
     assert(!_debugLocked);
-    assert(() { _debugLocked = true; return true; });
+    assert(() { _debugLocked = true; return true; }());
     for (NavigatorObserver observer in widget.observers)
       observer._navigator = null;
     final List<Route<dynamic>> doomed = _poppedRoutes.toList()..addAll(_history);
@@ -881,7 +830,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
     _history.clear();
     focusScopeNode.detach();
     super.dispose();
-    assert(() { _debugLocked = false; return true; });
+    assert(() { _debugLocked = false; return true; }());
   }
 
   /// The overlay this navigator uses for its visual presentation.
@@ -917,7 +866,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
           );
         }
         return true;
-      });
+      }());
       route = widget.onUnknownRoute(settings);
       assert(() {
         if (route == null) {
@@ -930,7 +879,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
           );
         }
         return true;
-      });
+      }());
     }
     return route;
   }
@@ -966,7 +915,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
   /// when the pushed route is popped off the navigator.
   Future<dynamic> push(Route<dynamic> route) {
     assert(!_debugLocked);
-    assert(() { _debugLocked = true; return true; });
+    assert(() { _debugLocked = true; return true; }());
     assert(route != null);
     assert(route._navigator == null);
     setState(() {
@@ -981,7 +930,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
       for (NavigatorObserver observer in widget.observers)
         observer.didPush(route, oldRoute);
     });
-    assert(() { _debugLocked = false; return true; });
+    assert(() { _debugLocked = false; return true; }());
     _cancelActivePointers();
     return route.popped;
   }
@@ -1000,7 +949,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
     assert(newRoute != null);
     if (oldRoute == newRoute)
       return;
-    assert(() { _debugLocked = true; return true; });
+    assert(() { _debugLocked = true; return true; }());
     assert(oldRoute._navigator == this);
     assert(newRoute._navigator == null);
     assert(oldRoute.overlayEntries.isNotEmpty);
@@ -1023,7 +972,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
         _history[index - 1].didChangeNext(newRoute);
       oldRoute.dispose();
     });
-    assert(() { _debugLocked = false; return true; });
+    assert(() { _debugLocked = false; return true; }());
   }
 
   /// Push the [newRoute] and dispose the old current Route.
@@ -1038,7 +987,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
   /// as if the old route had been popped.
   Future<dynamic> pushReplacement(Route<dynamic> newRoute, { dynamic result }) {
     assert(!_debugLocked);
-    assert(() { _debugLocked = true; return true; });
+    assert(() { _debugLocked = true; return true; }());
     final Route<dynamic> oldRoute = _history.last;
     assert(oldRoute != null && oldRoute._navigator == this);
     assert(oldRoute.overlayEntries.isNotEmpty);
@@ -1066,7 +1015,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
       for (NavigatorObserver observer in widget.observers)
         observer.didPush(newRoute, oldRoute);
     });
-    assert(() { _debugLocked = false; return true; });
+    assert(() { _debugLocked = false; return true; }());
     _cancelActivePointers();
     return newRoute.popped;
   }
@@ -1105,7 +1054,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
   /// [Route.didChangePrevious]). The navigator observer is not notified.
   void removeRouteBelow(Route<dynamic> anchorRoute) {
     assert(!_debugLocked);
-    assert(() { _debugLocked = true; return true; });
+    assert(() { _debugLocked = true; return true; }());
     assert(anchorRoute._navigator == this);
     final int index = _history.indexOf(anchorRoute) - 1;
     assert(index >= 0);
@@ -1122,7 +1071,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
         nextRoute.didChangePrevious(previousRoute);
       targetRoute.dispose();
     });
-    assert(() { _debugLocked = false; return true; });
+    assert(() { _debugLocked = false; return true; }());
   }
 
   /// Push the given route and then remove all the previous routes until the
@@ -1138,7 +1087,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
   /// that always returns false.
   Future<dynamic> pushAndRemoveUntil(Route<dynamic> newRoute, RoutePredicate predicate) {
     assert(!_debugLocked);
-    assert(() { _debugLocked = true; return true; });
+    assert(() { _debugLocked = true; return true; }());
     final List<Route<dynamic>> removedRoutes = <Route<dynamic>>[];
     while (_history.isNotEmpty && !predicate(_history.last)) {
       final Route<dynamic> removedRoute = _history.removeLast();
@@ -1165,7 +1114,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
       for (NavigatorObserver observer in widget.observers)
         observer.didPush(newRoute, oldRoute);
     });
-    assert(() { _debugLocked = false; return true; });
+    assert(() { _debugLocked = false; return true; }());
     _cancelActivePointers();
     return newRoute.popped;
   }
@@ -1225,11 +1174,11 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
   /// popped.
   bool pop([dynamic result]) {
     assert(!_debugLocked);
-    assert(() { _debugLocked = true; return true; });
+    assert(() { _debugLocked = true; return true; }());
     final Route<dynamic> route = _history.last;
     assert(route._navigator == this);
     bool debugPredictedWouldPop;
-    assert(() { debugPredictedWouldPop = !route.willHandlePopInternally; return true; });
+    assert(() { debugPredictedWouldPop = !route.willHandlePopInternally; return true; }());
     if (route.didPop(result ?? route.currentResult)) {
       assert(debugPredictedWouldPop);
       if (_history.length > 1) {
@@ -1248,13 +1197,13 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
             observer.didPop(route, _history.last);
         });
       } else {
-        assert(() { _debugLocked = false; return true; });
+        assert(() { _debugLocked = false; return true; }());
         return false;
       }
     } else {
       assert(!debugPredictedWouldPop);
     }
-    assert(() { _debugLocked = false; return true; });
+    assert(() { _debugLocked = false; return true; }());
     _cancelActivePointers();
     return true;
   }
@@ -1271,7 +1220,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
   void removeRoute(Route<dynamic> route) {
     assert(route != null);
     assert(!_debugLocked);
-    assert(() { _debugLocked = true; return true; });
+    assert(() { _debugLocked = true; return true; }());
     assert(route._navigator == this);
     final int index = _history.indexOf(route);
     assert(index != -1);
@@ -1285,7 +1234,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
         observer.didRemove(route, previousRoute);
       route.dispose();
     });
-    assert(() { _debugLocked = false; return true; });
+    assert(() { _debugLocked = false; return true; }());
     _cancelActivePointers();
   }
 
@@ -1326,33 +1275,35 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
     return _history.length > 1 || _history[0].willHandlePopInternally;
   }
 
-  /// Starts a gesture that results in popping the navigator.
-  NavigationGestureController startPopGesture() {
-    if (canPop())
-      return _history.last.startPopGesture();
-    return null;
-  }
-
-  /// Whether a gesture controlled by a [NavigationGestureController] is currently in progress.
-  bool get userGestureInProgress => _userGestureInProgress;
-  // TODO(mpcomplete): remove this bool when we fix
-  // https://github.com/flutter/flutter/issues/5577
-  bool _userGestureInProgress = false;
+  /// Whether a route is currently being manipulated by the user, e.g.
+  /// as during an iOS back gesture.
+  bool get userGestureInProgress => _userGesturesInProgress > 0;
+  int _userGesturesInProgress = 0;
 
   /// The navigator is being controlled by a user gesture.
   ///
-  /// Used for the iOS back gesture.
+  /// For example, called when the user beings an iOS back gesture.
+  ///
+  /// When the gesture finishes, call [didStopUserGesture].
   void didStartUserGesture() {
-    _userGestureInProgress = true;
-    for (NavigatorObserver observer in widget.observers)
-      observer.didStartUserGesture();
+    _userGesturesInProgress += 1;
+    if (_userGesturesInProgress == 1) {
+      for (NavigatorObserver observer in widget.observers)
+        observer.didStartUserGesture();
+    }
   }
 
-  /// A user gesture is no longer controlling the navigator.
+  /// A user gesture completed.
+  ///
+  /// Notifies the navigator that a gesture regarding which the navigator was
+  /// previously notified with [didStartUserGesture] has completed.
   void didStopUserGesture() {
-    _userGestureInProgress = false;
-    for (NavigatorObserver observer in widget.observers)
-      observer.didStopUserGesture();
+    assert(_userGesturesInProgress > 0);
+    _userGesturesInProgress -= 1;
+    if (_userGesturesInProgress == 0) {
+      for (NavigatorObserver observer in widget.observers)
+        observer.didStopUserGesture();
+    }
   }
 
   final Set<int> _activePointers = new Set<int>();
@@ -1376,8 +1327,7 @@ class NavigatorState extends State<Navigator> with TickerProviderStateMixin {
         absorber?.absorbing = true;
       });
     }
-    for (int pointer in _activePointers.toList())
-      WidgetsBinding.instance.cancelPointer(pointer);
+    _activePointers.toList().forEach(WidgetsBinding.instance.cancelPointer);
   }
 
   @override

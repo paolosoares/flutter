@@ -29,8 +29,11 @@ const Color _kDefaultTabBarBorderColor = const Color(0x4C000000);
 ///
 /// If the given [backgroundColor]'s opacity is not 1.0 (which is the case by
 /// default), it will produce a blurring effect to the content behind it.
-//
-// TODO(xster): document using with a CupertinoScaffold.
+///
+/// See also:
+///
+///  * [CupertinoTabScaffold], which hosts the [CupertinoTabBar] at the bottom.
+///  * [BottomNavigationBarItem], an item in a [CupertinoTabBar].
 class CupertinoTabBar extends StatelessWidget implements PreferredSizeWidget {
   /// Creates a tab bar in the iOS style.
   CupertinoTabBar({
@@ -41,7 +44,7 @@ class CupertinoTabBar extends StatelessWidget implements PreferredSizeWidget {
     this.backgroundColor: _kDefaultTabBarBackgroundColor,
     this.activeColor: CupertinoColors.activeBlue,
     this.inactiveColor: CupertinoColors.inactiveGray,
-    this.iconSize: 24.0,
+    this.iconSize: 30.0,
   }) : assert(items != null),
        assert(items.length >= 2),
        assert(0 <= currentIndex && currentIndex < items.length),
@@ -108,10 +111,12 @@ class CupertinoTabBar extends StatelessWidget implements PreferredSizeWidget {
             color: inactiveColor,
             size: iconSize,
           ),
-          child: DefaultTextStyle.merge( // Default with the inactive state.
+          child: new DefaultTextStyle( // Default with the inactive state.
             style: new TextStyle(
+              fontFamily: '.SF UI Text',
               fontSize: 10.0,
-              letterSpacing: 0.12,
+              letterSpacing: -0.24,
+              fontWeight: FontWeight.w500,
               color: inactiveColor,
             ),
             child: new Row(
@@ -140,7 +145,7 @@ class CupertinoTabBar extends StatelessWidget implements PreferredSizeWidget {
   List<Widget> _buildTabItems() {
     final List<Widget> result = <Widget>[];
 
-    for (int index = 0; index < items.length; ++index) {
+    for (int index = 0; index < items.length; index += 1) {
       result.add(
         _wrapActiveItem(
           new Expanded(

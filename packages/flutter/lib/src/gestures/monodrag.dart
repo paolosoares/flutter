@@ -101,6 +101,7 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
   _DragState _state = _DragState.ready;
   Offset _initialPosition;
   Offset _pendingDragOffset;
+  Duration _lastPendingEventTimestamp;
 
   bool _isFlingGesture(VelocityEstimate estimate);
   Offset _getDeltaForDetails(Offset delta);
@@ -117,6 +118,7 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
       _state = _DragState.possible;
       _initialPosition = event.position;
       _pendingDragOffset = Offset.zero;
+      _lastPendingEventTimestamp = event.timeStamp;
       if (onDown != null)
         invokeCallback<Null>('onDown', () => onDown(new DragDownDetails(globalPosition: _initialPosition))); // ignore: STRONG_MODE_INVALID_CAST_FUNCTION_EXPR, https://github.com/dart-lang/sdk/issues/27504
     } else if (_state == _DragState.accepted) {
@@ -127,14 +129,19 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
   @override
   void handleEvent(PointerEvent event) {
     assert(_state != _DragState.ready);
-    if (event is PointerMoveEvent) {
+    if (!event.synthesized
+        && (event is PointerDownEvent || event is PointerMoveEvent)) {
       final VelocityTracker tracker = _velocityTrackers[event.pointer];
       assert(tracker != null);
       tracker.addPosition(event.timeStamp, event.position);
+    }
+
+    if (event is PointerMoveEvent) {
       final Offset delta = event.delta;
       if (_state == _DragState.accepted) {
         if (onUpdate != null) {
           invokeCallback<Null>('onUpdate', () => onUpdate(new DragUpdateDetails( // ignore: STRONG_MODE_INVALID_CAST_FUNCTION_EXPR, https://github.com/dart-lang/sdk/issues/27504
+            sourceTimeStamp: event.timeStamp,
             delta: _getDeltaForDetails(delta),
             primaryDelta: _getPrimaryValueFromOffset(delta),
             globalPosition: event.position,
@@ -142,6 +149,7 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
         }
       } else {
         _pendingDragOffset += delta;
+        _lastPendingEventTimestamp = event.timeStamp;
         if (_hasSufficientPendingDragDeltaToAccept)
           resolve(GestureDisposition.accepted);
       }
@@ -154,14 +162,18 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
     if (_state != _DragState.accepted) {
       _state = _DragState.accepted;
       final Offset delta = _pendingDragOffset;
+      final Duration timestamp = _lastPendingEventTimestamp;
       _pendingDragOffset = Offset.zero;
+      _lastPendingEventTimestamp = null;
       if (onStart != null) {
         invokeCallback<Null>('onStart', () => onStart(new DragStartDetails( // ignore: STRONG_MODE_INVALID_CAST_FUNCTION_EXPR, https://github.com/dart-lang/sdk/issues/27504
+          sourceTimeStamp: timestamp,
           globalPosition: _initialPosition,
         )));
       }
       if (delta != Offset.zero && onUpdate != null) {
         invokeCallback<Null>('onUpdate', () => onUpdate(new DragUpdateDetails( // ignore: STRONG_MODE_INVALID_CAST_FUNCTION_EXPR, https://github.com/dart-lang/sdk/issues/27504
+          sourceTimeStamp: timestamp,
           delta: _getDeltaForDetails(delta),
           primaryDelta: _getPrimaryValueFromOffset(delta),
           globalPosition: _initialPosition,
@@ -252,7 +264,7 @@ class VerticalDragGestureRecognizer extends DragGestureRecognizer {
   double _getPrimaryValueFromOffset(Offset value) => value.dy;
 
   @override
-  String toStringShort() => 'vertical drag';
+  String get debugDescription => 'vertical drag';
 }
 
 /// Recognizes movement in the horizontal direction.
@@ -286,7 +298,7 @@ class HorizontalDragGestureRecognizer extends DragGestureRecognizer {
   double _getPrimaryValueFromOffset(Offset value) => value.dx;
 
   @override
-  String toStringShort() => 'horizontal drag';
+  String get debugDescription => 'horizontal drag';
 }
 
 /// Recognizes movement both horizontally and vertically.
@@ -322,5 +334,5 @@ class PanGestureRecognizer extends DragGestureRecognizer {
   double _getPrimaryValueFromOffset(Offset value) => null;
 
   @override
-  String toStringShort() => 'pan';
+  String get debugDescription => 'pan';
 }

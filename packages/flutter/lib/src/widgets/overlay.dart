@@ -251,7 +251,7 @@ class Overlay extends StatefulWidget {
         );
       }
       return true;
-    });
+    }());
     return result;
   }
 
@@ -331,7 +331,7 @@ class OverlayState extends State<Overlay> with TickerProviderStateMixin {
           break;
       }
       return true;
-    });
+    }());
     return result;
   }
 
@@ -370,7 +370,7 @@ class OverlayState extends State<Overlay> with TickerProviderStateMixin {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     // TODO(jacobr): use IterableProperty instead as that would
     // provide a slightly more consistent string summary of the List.
@@ -470,7 +470,7 @@ class _TheatreElement extends RenderObjectElement {
   }
 
   @override
-  void visitChildrenForSemantics(ElementVisitor visitor) {
+  void debugVisitOnstageChildren(ElementVisitor visitor) {
     if (_onstage != null)
       visitor(_onstage);
   }

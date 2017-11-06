@@ -235,6 +235,7 @@ void main() {
     // of the Image changes and the MediaQuery widgets do not.
     await tester.pumpWidget(
       new Row(
+        textDirection: TextDirection.ltr,
         children: <Widget> [
           new MediaQuery(
             key: mediaQueryKey2,
@@ -263,6 +264,7 @@ void main() {
 
     await tester.pumpWidget(
       new Row(
+        textDirection: TextDirection.ltr,
         children: <Widget> [
           new MediaQuery(
             key: mediaQueryKey2,
@@ -294,12 +296,12 @@ void main() {
     final TestImageProvider imageProvider = new TestImageProvider();
     await tester.pumpWidget(new Image(image: imageProvider));
     final State<Image> image = tester.state/*State<Image>*/(find.byType(Image));
-    expect(image.toString(), equalsIgnoringHashCodes('_ImageState#00000(stream: ImageStream(OneFrameImageStreamCompleter; unresolved; 1 listener); pixels: null)'));
+    expect(image.toString(), equalsIgnoringHashCodes('_ImageState#00000(stream: ImageStream(OneFrameImageStreamCompleter, unresolved, 1 listener), pixels: null)'));
     imageProvider.complete();
     await tester.pump();
-    expect(image.toString(), equalsIgnoringHashCodes('_ImageState#00000(stream: ImageStream(OneFrameImageStreamCompleter; [100×100] @ 1.0x; 1 listener); pixels: [100×100] @ 1.0x)'));
+    expect(image.toString(), equalsIgnoringHashCodes('_ImageState#00000(stream: ImageStream(OneFrameImageStreamCompleter, [100×100] @ 1.0x, 1 listener), pixels: [100×100] @ 1.0x)'));
     await tester.pumpWidget(new Container());
-    expect(image.toString(), equalsIgnoringHashCodes('_ImageState#00000(lifecycle state: defunct; not mounted; stream: ImageStream(OneFrameImageStreamCompleter; [100×100] @ 1.0x; 0 listeners); pixels: [100×100] @ 1.0x)'));
+    expect(image.toString(), equalsIgnoringHashCodes('_ImageState#00000(lifecycle state: defunct, not mounted, stream: ImageStream(OneFrameImageStreamCompleter, [100×100] @ 1.0x, 0 listeners), pixels: [100×100] @ 1.0x)'));
   });
 
   testWidgets('Image.memory control test', (WidgetTester tester) async {

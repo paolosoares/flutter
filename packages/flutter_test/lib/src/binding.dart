@@ -142,7 +142,7 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
     createHttpClient = () {
       return new http.MockClient((http.BaseRequest request) {
         return new Future<http.Response>.value(
-          new http.Response("Mocked: Unavailable.", 404, request: request)
+          new http.Response('Mocked: Unavailable.', 404, request: request)
         );
       });
     };
@@ -269,20 +269,22 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
 
   static const TextStyle _kMessageStyle = const TextStyle(
     color: const Color(0xFF917FFF),
-    fontSize: 40.0
+    fontSize: 40.0,
   );
 
   static final Widget _kPreTestMessage = const Center(
     child: const Text(
       'Test starting...',
-      style: _kMessageStyle
+      style: _kMessageStyle,
+      textDirection: TextDirection.ltr,
     )
   );
 
   static final Widget _kPostTestMessage = const Center(
     child: const Text(
       'Test finished.',
-      style: _kMessageStyle
+      style: _kMessageStyle,
+      textDirection: TextDirection.ltr,
     )
   );
 
@@ -317,6 +319,7 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
 
   Zone _parentZone;
   Completer<Null> _currentTestCompleter;
+  String _currentTestDescription; // set from _runTest to _testCompletionHandler
 
   void _testCompletionHandler() {
     // This can get called twice, in the case of a Future without listeners failing, and then
@@ -331,15 +334,21 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
       // but the test package does, that's how the test package tracks errors. So really we could
       // get the same effect here by calling that error handler directly or indeed just throwing.
       // However, we call registerException because that's the semantically correct thing...
-      test_package.registerException('Test failed. See exception logs above.', _EmptyStack.instance);
+      String additional = '';
+      if (_currentTestDescription != '')
+        additional = '\nThe test description was: $_currentTestDescription';
+      test_package.registerException('Test failed. See exception logs above.$additional', _emptyStackTrace);
       _pendingExceptionDetails = null;
     }
+    _currentTestDescription = null;
     if (!_currentTestCompleter.isCompleted)
       _currentTestCompleter.complete(null);
   }
 
   Future<Null> _runTest(Future<Null> testBody(), VoidCallback invariantTester, String description) {
     assert(description != null);
+    assert(_currentTestDescription == null);
+    _currentTestDescription = description; // cleared by _testCompletionHandler
     assert(inTest);
     _oldExceptionHandler = FlutterError.onError;
     int _exceptionCount = 0; // number of un-taken exceptions
@@ -433,13 +442,13 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
           }
         ));
         assert(_parentZone != null);
-        assert(_pendingExceptionDetails != null);
+        assert(_pendingExceptionDetails != null, 'A test overrode FlutterError.onError but either failed to return it to its original state, or had unexpected additional errors that it could not handle. Typically, this is caused by using expect() before restoring FlutterError.onError.');
         _parentZone.run<Null>(_testCompletionHandler);
       }
     );
     _parentZone = Zone.current;
     final Zone testZone = _parentZone.fork(specification: errorHandlingZoneSpecification);
-    testZone.runBinaryGuarded(_runTestBody, testBody, invariantTester)
+    testZone.runBinary(_runTestBody, testBody, invariantTester)
       .whenComplete(_testCompletionHandler);
     asyncBarrier(); // When using AutomatedTestWidgetsFlutterBinding, this flushes the microtasks.
     return _currentTestCompleter.future;
@@ -1019,7 +1028,8 @@ class _LiveTestRenderView extends RenderView {
       _label = null;
       return;
     }
-    _label ??= new TextPainter(textAlign: TextAlign.left);
+    // TODO(ianh): Figure out if the test name is actually RTL.
+    _label ??= new TextPainter(textAlign: TextAlign.left, textDirection: TextDirection.ltr);
     _label.text = new TextSpan(text: value, style: _labelStyle);
     _label.layout();
     if (onNeedPaint != null)
@@ -1072,12 +1082,7 @@ class _LiveTestRenderView extends RenderView {
   }
 }
 
-class _EmptyStack implements StackTrace {
-  const _EmptyStack._();
-  static const _EmptyStack instance = const _EmptyStack._();
-  @override
-  String toString() => '';
-}
+final StackTrace _emptyStackTrace = new stack_trace.Chain(const <stack_trace.Trace>[]);
 
 StackTrace _unmangle(StackTrace stack) {
   if (stack is stack_trace.Trace)

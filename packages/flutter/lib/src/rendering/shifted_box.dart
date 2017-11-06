@@ -91,29 +91,62 @@ class RenderPadding extends RenderShiftedBox {
   ///
   /// The [padding] argument must not be null and must have non-negative insets.
   RenderPadding({
-    @required EdgeInsets padding,
-    RenderBox child
+    @required EdgeInsetsGeometry padding,
+    TextDirection textDirection,
+    RenderBox child,
   }) : assert(padding != null),
        assert(padding.isNonNegative),
+       _textDirection = textDirection,
        _padding = padding,
        super(child);
 
+  EdgeInsets _resolvedPadding;
+
+  void _resolve() {
+    if (_resolvedPadding != null)
+      return;
+    _resolvedPadding = padding.resolve(textDirection);
+    assert(_resolvedPadding.isNonNegative);
+  }
+
+  void _markNeedResolution() {
+    _resolvedPadding = null;
+    markNeedsLayout();
+  }
+
   /// The amount to pad the child in each dimension.
-  EdgeInsets get padding => _padding;
-  EdgeInsets _padding;
-  set padding(EdgeInsets value) {
+  ///
+  /// If this is set to an [EdgeInsetsDirectional] object, then [textDirection]
+  /// must not be null.
+  EdgeInsetsGeometry get padding => _padding;
+  EdgeInsetsGeometry _padding;
+  set padding(EdgeInsetsGeometry value) {
     assert(value != null);
     assert(value.isNonNegative);
     if (_padding == value)
       return;
     _padding = value;
-    markNeedsLayout();
+    _markNeedResolution();
+  }
+
+  /// The text direction with which to resolve [padding].
+  ///
+  /// This may be changed to null, but only after the [padding] has been changed
+  /// to a value that does not depend on the direction.
+  TextDirection get textDirection => _textDirection;
+  TextDirection _textDirection;
+  set textDirection(TextDirection value) {
+    if (_textDirection == value)
+      return;
+    _textDirection = value;
+    _markNeedResolution();
   }
 
   @override
   double computeMinIntrinsicWidth(double height) {
-    final double totalHorizontalPadding = padding.left + padding.right;
-    final double totalVerticalPadding = padding.top + padding.bottom;
+    _resolve();
+    final double totalHorizontalPadding = _resolvedPadding.left + _resolvedPadding.right;
+    final double totalVerticalPadding = _resolvedPadding.top + _resolvedPadding.bottom;
     if (child != null) // next line relies on double.INFINITY absorption
       return child.getMinIntrinsicWidth(math.max(0.0, height - totalVerticalPadding)) + totalHorizontalPadding;
     return totalHorizontalPadding;
@@ -121,8 +154,9 @@ class RenderPadding extends RenderShiftedBox {
 
   @override
   double computeMaxIntrinsicWidth(double height) {
-    final double totalHorizontalPadding = padding.left + padding.right;
-    final double totalVerticalPadding = padding.top + padding.bottom;
+    _resolve();
+    final double totalHorizontalPadding = _resolvedPadding.left + _resolvedPadding.right;
+    final double totalVerticalPadding = _resolvedPadding.top + _resolvedPadding.bottom;
     if (child != null) // next line relies on double.INFINITY absorption
       return child.getMaxIntrinsicWidth(math.max(0.0, height - totalVerticalPadding)) + totalHorizontalPadding;
     return totalHorizontalPadding;
@@ -130,8 +164,9 @@ class RenderPadding extends RenderShiftedBox {
 
   @override
   double computeMinIntrinsicHeight(double width) {
-    final double totalHorizontalPadding = padding.left + padding.right;
-    final double totalVerticalPadding = padding.top + padding.bottom;
+    _resolve();
+    final double totalHorizontalPadding = _resolvedPadding.left + _resolvedPadding.right;
+    final double totalVerticalPadding = _resolvedPadding.top + _resolvedPadding.bottom;
     if (child != null) // next line relies on double.INFINITY absorption
       return child.getMinIntrinsicHeight(math.max(0.0, width - totalHorizontalPadding)) + totalVerticalPadding;
     return totalVerticalPadding;
@@ -139,8 +174,9 @@ class RenderPadding extends RenderShiftedBox {
 
   @override
   double computeMaxIntrinsicHeight(double width) {
-    final double totalHorizontalPadding = padding.left + padding.right;
-    final double totalVerticalPadding = padding.top + padding.bottom;
+    _resolve();
+    final double totalHorizontalPadding = _resolvedPadding.left + _resolvedPadding.right;
+    final double totalVerticalPadding = _resolvedPadding.top + _resolvedPadding.bottom;
     if (child != null) // next line relies on double.INFINITY absorption
       return child.getMaxIntrinsicHeight(math.max(0.0, width - totalHorizontalPadding)) + totalVerticalPadding;
     return totalVerticalPadding;
@@ -148,21 +184,22 @@ class RenderPadding extends RenderShiftedBox {
 
   @override
   void performLayout() {
-    assert(padding != null);
+    _resolve();
+    assert(_resolvedPadding != null);
     if (child == null) {
       size = constraints.constrain(new Size(
-        padding.left + padding.right,
-        padding.top + padding.bottom
+        _resolvedPadding.left + _resolvedPadding.right,
+        _resolvedPadding.top + _resolvedPadding.bottom
       ));
       return;
     }
-    final BoxConstraints innerConstraints = constraints.deflate(padding);
+    final BoxConstraints innerConstraints = constraints.deflate(_resolvedPadding);
     child.layout(innerConstraints, parentUsesSize: true);
     final BoxParentData childParentData = child.parentData;
-    childParentData.offset = new Offset(padding.left, padding.top);
+    childParentData.offset = new Offset(_resolvedPadding.left, _resolvedPadding.top);
     size = constraints.constrain(new Size(
-      padding.left + child.size.width + padding.right,
-      padding.top + child.size.height + padding.bottom
+      _resolvedPadding.left + child.size.width + _resolvedPadding.right,
+      _resolvedPadding.top + child.size.height + _resolvedPadding.bottom
     ));
   }
 
@@ -171,51 +208,83 @@ class RenderPadding extends RenderShiftedBox {
     super.debugPaintSize(context, offset);
     assert(() {
       final Rect outerRect = offset & size;
-      debugPaintPadding(context.canvas, outerRect, child != null ? padding.deflateRect(outerRect) : null);
+      debugPaintPadding(context.canvas, outerRect, child != null ? _resolvedPadding.deflateRect(outerRect) : null);
       return true;
-    });
+    }());
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
-    description.add(new DiagnosticsProperty<EdgeInsets>('padding', padding));
+    description.add(new DiagnosticsProperty<EdgeInsetsGeometry>('padding', padding));
+    description.add(new EnumProperty<TextDirection>('textDirection', textDirection, defaultValue: null));
   }
 }
 
 /// Abstract class for one-child-layout render boxes that use a
-/// [FractionalOffset] to align their children.
+/// [AlignmentGeometry] to align their children.
 abstract class RenderAligningShiftedBox extends RenderShiftedBox {
   /// Initializes member variables for subclasses.
   ///
   /// The [alignment] argument must not be null.
   RenderAligningShiftedBox({
-    FractionalOffset alignment: FractionalOffset.center,
-    RenderBox child
-  }) : assert(alignment != null && alignment.dx != null && alignment.dy != null),
+    AlignmentGeometry alignment: Alignment.center,
+    @required TextDirection textDirection,
+    RenderBox child,
+  }) : assert(alignment != null),
        _alignment = alignment,
+       _textDirection = textDirection,
        super(child);
+
+  Alignment _resolvedAlignment;
+
+  void _resolve() {
+    if (_resolvedAlignment != null)
+      return;
+    _resolvedAlignment = alignment.resolve(textDirection);
+  }
+
+  void _markNeedResolution() {
+    _resolvedAlignment = null;
+    markNeedsLayout();
+  }
 
   /// How to align the child.
   ///
   /// The x and y values of the alignment control the horizontal and vertical
-  /// alignment, respectively.  An x value of 0.0 means that the left edge of
+  /// alignment, respectively. An x value of -1.0 means that the left edge of
   /// the child is aligned with the left edge of the parent whereas an x value
   /// of 1.0 means that the right edge of the child is aligned with the right
   /// edge of the parent. Other values interpolate (and extrapolate) linearly.
-  /// For example, a value of 0.5 means that the center of the child is aligned
+  /// For example, a value of 0.0 means that the center of the child is aligned
   /// with the center of the parent.
-  FractionalOffset get alignment => _alignment;
-  FractionalOffset _alignment;
+  ///
+  /// If this is set to a [AlignmentDirectional] object, then
+  /// [textDirection] must not be null.
+  AlignmentGeometry get alignment => _alignment;
+  AlignmentGeometry _alignment;
   /// Sets the alignment to a new value, and triggers a layout update.
   ///
-  /// The new alignment must not be null or have any null properties.
-  set alignment(FractionalOffset value) {
-    assert(value != null && value.dx != null && value.dy != null);
+  /// The new alignment must not be null.
+  set alignment(AlignmentGeometry value) {
+    assert(value != null);
     if (_alignment == value)
       return;
     _alignment = value;
-    markNeedsLayout();
+    _markNeedResolution();
+  }
+
+  /// The text direction with which to resolve [alignment].
+  ///
+  /// This may be changed to null, but only after [alignment] has been changed
+  /// to a value that does not depend on the direction.
+  TextDirection get textDirection => _textDirection;
+  TextDirection _textDirection;
+  set textDirection(TextDirection value) {
+    if (_textDirection == value)
+      return;
+    _textDirection = value;
+    _markNeedResolution();
   }
 
   /// Apply the current [alignment] to the [child].
@@ -227,26 +296,29 @@ abstract class RenderAligningShiftedBox extends RenderShiftedBox {
   /// This method must be called after the child has been laid out and
   /// this object's own size has been set.
   void alignChild() {
+    _resolve();
     assert(child != null);
     assert(!child.debugNeedsLayout);
     assert(child.hasSize);
     assert(hasSize);
+    assert(_resolvedAlignment != null);
     final BoxParentData childParentData = child.parentData;
-    childParentData.offset = alignment.alongOffset(size - child.size);
+    childParentData.offset = _resolvedAlignment.alongOffset(size - child.size);
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
-    description.add(new DiagnosticsProperty<FractionalOffset>('alignment', alignment));
+    description.add(new DiagnosticsProperty<AlignmentGeometry>('alignment', alignment));
+    description.add(new EnumProperty<TextDirection>('textDirection', textDirection, defaultValue: null));
   }
 }
 
-/// Positions its child using a [FractionalOffset].
+/// Positions its child using a [AlignmentGeometry].
 ///
 /// For example, to align a box at the bottom right, you would pass this box a
 /// tight constraint that is bigger than the child's natural size,
-/// with an alignment of [FractionalOffset.bottomRight].
+/// with an alignment of [Alignment.bottomRight].
 ///
 /// By default, sizes to be as big as possible in both axes. If either axis is
 /// unconstrained, then in that direction it will be sized to fit the child's
@@ -258,12 +330,13 @@ class RenderPositionedBox extends RenderAligningShiftedBox {
     RenderBox child,
     double widthFactor,
     double heightFactor,
-    FractionalOffset alignment: FractionalOffset.center
+    AlignmentGeometry alignment: Alignment.center,
+    TextDirection textDirection,
   }) : assert(widthFactor == null || widthFactor >= 0.0),
        assert(heightFactor == null || heightFactor >= 0.0),
        _widthFactor = widthFactor,
        _heightFactor = heightFactor,
-       super(child: child, alignment: alignment);
+       super(child: child, alignment: alignment, textDirection: textDirection);
 
   /// If non-null, sets its width to the child's width multipled by this factor.
   ///
@@ -317,7 +390,7 @@ class RenderPositionedBox extends RenderAligningShiftedBox {
         paint = new Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.0
-          ..color = debugPaintBoxArrowColor;
+          ..color = const Color(0xFFFFFF00);
         path = new Path();
         final BoxParentData childParentData = child.parentData;
         if (childParentData.offset.dy > 0.0) {
@@ -358,15 +431,15 @@ class RenderPositionedBox extends RenderAligningShiftedBox {
         }
       } else {
         paint = new Paint()
-          ..color = debugPaintSpacingColor;
+          ..color = const Color(0x90909090);
         context.canvas.drawRect(offset & size, paint);
       }
       return true;
-    });
+    }());
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DoubleProperty('widthFactor', _widthFactor, ifNull: 'expand'));
     description.add(new DoubleProperty('heightFactor', _heightFactor, ifNull: 'expand'));
@@ -402,12 +475,13 @@ class RenderConstrainedOverflowBox extends RenderAligningShiftedBox {
     double maxWidth,
     double minHeight,
     double maxHeight,
-    FractionalOffset alignment: FractionalOffset.center
+    AlignmentGeometry alignment: Alignment.center,
+    TextDirection textDirection,
   }) : _minWidth = minWidth,
        _maxWidth = maxWidth,
        _minHeight = minHeight,
        _maxHeight = maxHeight,
-       super(child: child, alignment: alignment);
+       super(child: child, alignment: alignment, textDirection: textDirection);
 
   /// The minimum width constraint to give the child. Set this to null (the
   /// default) to use the constraint from the parent instead.
@@ -479,7 +553,7 @@ class RenderConstrainedOverflowBox extends RenderAligningShiftedBox {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DoubleProperty('minWidth', minWidth, ifNull: 'use parent minWidth constraint'));
     description.add(new DoubleProperty('maxWidth', maxWidth, ifNull: 'use parent maxWidth constraint'));
@@ -497,10 +571,11 @@ class RenderSizedOverflowBox extends RenderAligningShiftedBox {
   RenderSizedOverflowBox({
     RenderBox child,
     @required Size requestedSize,
-    FractionalOffset alignment: FractionalOffset.center
+    Alignment alignment: Alignment.center,
+    TextDirection textDirection,
   }) : assert(requestedSize != null),
        _requestedSize = requestedSize,
-       super(child: child, alignment: alignment);
+       super(child: child, alignment: alignment, textDirection: textDirection);
 
   /// The size this render box should attempt to be.
   Size get requestedSize => _requestedSize;
@@ -568,10 +643,11 @@ class RenderFractionallySizedOverflowBox extends RenderAligningShiftedBox {
     RenderBox child,
     double widthFactor,
     double heightFactor,
-    FractionalOffset alignment: FractionalOffset.center
+    Alignment alignment: Alignment.center,
+    TextDirection textDirection,
   }) : _widthFactor = widthFactor,
        _heightFactor = heightFactor,
-       super(child: child, alignment: alignment) {
+       super(child: child, alignment: alignment, textDirection: textDirection) {
     assert(_widthFactor == null || _widthFactor >= 0.0);
     assert(_heightFactor == null || _heightFactor >= 0.0);
   }
@@ -689,7 +765,7 @@ class RenderFractionallySizedOverflowBox extends RenderAligningShiftedBox {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DoubleProperty('widthFactor', _widthFactor, ifNull: 'pass-through'));
     description.add(new DoubleProperty('heightFactor', _heightFactor, ifNull: 'pass-through'));
@@ -945,7 +1021,7 @@ class RenderBaseline extends RenderShiftedBox {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DoubleProperty('baseline', baseline));
     description.add(new EnumProperty<TextBaseline>('baselineType', baselineType));

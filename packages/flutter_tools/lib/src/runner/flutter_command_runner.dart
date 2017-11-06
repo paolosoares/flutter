@@ -13,6 +13,7 @@ import '../artifacts.dart';
 import '../base/common.dart';
 import '../base/context.dart';
 import '../base/file_system.dart';
+import '../base/flags.dart';
 import '../base/logger.dart';
 import '../base/os.dart';
 import '../base/platform.dart';
@@ -163,6 +164,8 @@ class FlutterCommandRunner extends CommandRunner<Null> {
 
   @override
   Future<Null> runCommand(ArgResults globalResults) async {
+    context.setVariable(Flags, new Flags(globalResults));
+
     // Check for verbose.
     if (globalResults['verbose']) {
       // Override the logger.
@@ -270,8 +273,7 @@ class FlutterCommandRunner extends CommandRunner<Null> {
     }
 
     if (globalResults['machine']) {
-      printError('The --machine flag is only valid with the --version flag.');
-      throw new ProcessExit(2);
+      throwToolExit('The --machine flag is only valid with the --version flag.', exitCode: 2);
     }
 
     await super.runCommand(globalResults);
@@ -304,40 +306,41 @@ class FlutterCommandRunner extends CommandRunner<Null> {
       engineSourcePath ??= _tryEnginePath(fs.path.join(Cache.flutterRoot, '../engine/src'));
 
       if (engineSourcePath == null) {
-        printError('Unable to detect local Flutter engine build directory.\n'
-            'Either specify a dependency_override for the $kFlutterEnginePackageName package in your pubspec.yaml and\n'
-            'ensure --package-root is set if necessary, or set the \$$kFlutterEngineEnvironmentVariableName environment variable, or\n'
-            'use --local-engine-src-path to specify the path to the root of your flutter/engine repository.');
-        throw new ProcessExit(2);
+        throwToolExit('Unable to detect local Flutter engine build directory.\n'
+          'Either specify a dependency_override for the $kFlutterEnginePackageName package in your pubspec.yaml and\n'
+          'ensure --package-root is set if necessary, or set the \$$kFlutterEngineEnvironmentVariableName environment variable, or\n'
+          'use --local-engine-src-path to specify the path to the root of your flutter/engine repository.',
+          exitCode: 2);
       }
     }
 
     if (engineSourcePath != null && _tryEnginePath(engineSourcePath) == null) {
-      printError('Unable to detect a Flutter engine build directory in $engineSourcePath.\n'
-          'Please ensure that $engineSourcePath is a Flutter engine \'src\' directory and that\n'
-          'you have compiled the engine in that directory, which should produce an \'out\' directory');
-      throw new ProcessExit(2);
+      throwToolExit('Unable to detect a Flutter engine build directory in $engineSourcePath.\n'
+        'Please ensure that $engineSourcePath is a Flutter engine \'src\' directory and that\n'
+        'you have compiled the engine in that directory, which should produce an \'out\' directory',
+        exitCode: 2);
     }
 
     return engineSourcePath;
   }
 
-  String _findEngineBuildPath(ArgResults globalResults, String enginePath) {
+  EngineBuildPaths _findEngineBuildPath(ArgResults globalResults, String enginePath) {
     String localEngine;
     if (globalResults['local-engine'] != null) {
       localEngine = globalResults['local-engine'];
     } else {
-      printError('You must specify --local-engine if you are using a locally built engine.');
-      throw new ProcessExit(2);
+      throwToolExit('You must specify --local-engine if you are using a locally built engine.', exitCode: 2);
     }
 
     final String engineBuildPath = fs.path.normalize(fs.path.join(enginePath, 'out', localEngine));
     if (!fs.isDirectorySync(engineBuildPath)) {
-      printError('No Flutter engine build found at $engineBuildPath.');
-      throw new ProcessExit(2);
+      throwToolExit('No Flutter engine build found at $engineBuildPath.', exitCode: 2);
     }
 
-    return engineBuildPath;
+    final String hostLocalEngine = 'host_' + localEngine.substring(localEngine.indexOf('_') + 1);
+    final String engineHostBuildPath = fs.path.normalize(fs.path.join(enginePath, 'out', hostLocalEngine));
+
+    return new EngineBuildPaths(targetEngine: engineBuildPath, hostEngine: engineHostBuildPath);
   }
 
   static void initFlutterRoot() {

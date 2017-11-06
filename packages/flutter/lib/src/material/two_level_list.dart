@@ -130,7 +130,7 @@ class TwoLevelSublist extends StatefulWidget {
   /// Called when the sublist expands or collapses.
   ///
   /// When the sublist starts expanding, this function is called with the value
-  /// `true`. When the sublist starts collapsing, this function is called with
+  /// true. When the sublist starts collapsing, this function is called with
   /// the value false.
   final ValueChanged<bool> onOpenChanged;
 
@@ -263,7 +263,7 @@ class TwoLevelList extends StatelessWidget {
     Key key,
     this.children: const <Widget>[],
     this.type: MaterialListType.twoLine,
-    this.padding
+    this.padding,
   }) : assert(type != null),
        super(key: key);
 
@@ -276,7 +276,7 @@ class TwoLevelList extends StatelessWidget {
   final MaterialListType type;
 
   /// The amount of space by which to inset the children inside the viewport.
-  final EdgeInsets padding;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {

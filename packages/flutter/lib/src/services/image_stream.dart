@@ -7,7 +7,7 @@ import 'dart:ui' as ui show Image;
 
 import 'package:flutter/foundation.dart';
 
-/// A [ui.Image] object with its corresponding scale.
+/// A [dart:ui.Image] object with its corresponding scale.
 ///
 /// ImageInfo objects are used by [ImageStream] objects to represent the
 /// actual data of the image once it has been obtained.
@@ -33,7 +33,7 @@ class ImageInfo {
   ///
   /// For example, if this is 2.0 it means that there are four image pixels for
   /// every one logical pixel, and the image's actual width and height (as given
-  /// by the [ui.Image.width] and [ui.Image.height] properties) are double the
+  /// by the [dart:ui.Image.width] and [dart:ui.Image.height] properties) are double the
   /// height and width that should be used when painting the image (e.g. in the
   /// arguments given to [Canvas.drawImage]).
   final double scale;
@@ -56,7 +56,7 @@ typedef void ImageListener(ImageInfo image, bool synchronousCall);
 
 /// A handle to an image resource.
 ///
-/// ImageStream represents a handle to a [ui.Image] object and its scale
+/// ImageStream represents a handle to a [dart:ui.Image] object and its scale
 /// (together represented by an [ImageInfo] object). The underlying image object
 /// might change over time, either because the image is animating or because the
 /// underlying image resource was mutated.
@@ -70,7 +70,7 @@ typedef void ImageListener(ImageInfo image, bool synchronousCall);
 ///
 ///  * [ImageProvider], which has an example that includes the use of an
 ///    [ImageStream] in a [Widget].
-class ImageStream {
+class ImageStream extends Diagnosticable {
   /// Create an initially unbound image stream.
   ///
   /// Once an [ImageStreamCompleter] is available, call [setCompleter].
@@ -142,34 +142,35 @@ class ImageStream {
   Object get key => _completer != null ? _completer : this;
 
   @override
-  String toString() {
-    final StringBuffer result = new StringBuffer();
-    result.write('$runtimeType(');
-    if (_completer == null) {
-      result.write('unresolved; ');
-      if (_listeners != null) {
-        result.write('${_listeners.length} listener${_listeners.length == 1 ? "" : "s" }');
-      } else {
-        result.write('no listeners');
-      }
-    } else {
-      result.write('${_completer.runtimeType}; ');
-      final List<String> description = <String>[];
-      _completer.debugFillDescription(description);
-      result.write(description.join('; '));
-    }
-    result.write(')');
-    return result.toString();
+  String toStringShort() => '$runtimeType';
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(new ObjectFlagProperty<ImageStreamCompleter>(
+      'completer',
+      _completer,
+      ifPresent: _completer?.toStringShort(),
+      ifNull: 'unresolved',
+    ));
+    properties.add(new ObjectFlagProperty<List<ImageListener>>(
+      'listeners',
+      _listeners,
+      ifPresent: '${_listeners?.length} listener${_listeners?.length == 1 ? "" : "s" }',
+      ifNull: 'no listeners',
+      level: _completer != null ? DiagnosticLevel.hidden : DiagnosticLevel.info,
+    ));
+    _completer?.debugFillProperties(properties);
   }
 }
 
-/// Base class for those that manage the loading of [ui.Image] objects for
+/// Base class for those that manage the loading of [dart:ui.Image] objects for
 /// [ImageStream]s.
 ///
 /// This class is rarely used directly. Generally, an [ImageProvider] subclass
 /// will return an [ImageStream] and automatically configure it with the right
 /// [ImageStreamCompleter] when possible.
-class ImageStreamCompleter {
+class ImageStreamCompleter extends Diagnosticable {
   final List<ImageListener> _listeners = <ImageListener>[];
   ImageInfo _current;
 
@@ -226,26 +227,23 @@ class ImageStreamCompleter {
   }
 
   @override
-  String toString() {
-    final List<String> description = <String>[];
-    debugFillDescription(description);
-    return '$runtimeType(${description.join("; ")})';
-  }
+  String toStringShort() => '$runtimeType';
 
   /// Accumulates a list of strings describing the object's state. Subclasses
   /// should override this to have their information included in [toString].
-  @protected
-  @mustCallSuper
-  void debugFillDescription(List<String> description) {
-    if (_current == null)
-      description.add('unresolved');
-    else
-      description.add('$_current');
-    description.add('${_listeners.length} listener${_listeners.length == 1 ? "" : "s" }');
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
+    super.debugFillProperties(description);
+    description.add(new DiagnosticsProperty<ImageInfo>('current', _current, ifNull: 'unresolved', showName: false));
+    description.add(new ObjectFlagProperty<List<ImageListener>>(
+      'listeners',
+      _listeners,
+      ifPresent: '${_listeners?.length} listener${_listeners?.length == 1 ? "" : "s" }',
+    ));
   }
 }
 
-/// Manages the loading of [ui.Image] objects for static [ImageStream]s (those
+/// Manages the loading of [dart:ui.Image] objects for static [ImageStream]s (those
 /// with only one frame).
 class OneFrameImageStreamCompleter extends ImageStreamCompleter {
   /// Creates a manager for one-frame [ImageStream]s.

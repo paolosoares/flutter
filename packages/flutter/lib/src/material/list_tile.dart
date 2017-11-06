@@ -387,13 +387,17 @@ class ListTile extends StatelessWidget {
     // Overall, the list tile is a Row() with these children.
     final List<Widget> children = <Widget>[];
 
+    IconThemeData iconThemeData;
+    if (leading != null || trailing != null)
+      iconThemeData = new IconThemeData(color: _iconColor(theme, tileTheme));
+
     if (leading != null) {
       children.add(IconTheme.merge(
-        data: new IconThemeData(color: _iconColor(theme, tileTheme)),
+        data: iconThemeData,
         child: new Container(
-          margin: const EdgeInsets.only(right: 16.0),
+          margin: const EdgeInsetsDirectional.only(end: 16.0),
           width: 40.0,
-          alignment: FractionalOffset.centerLeft,
+          alignment: AlignmentDirectional.centerStart,
           child: leading,
         ),
       ));
@@ -424,10 +428,13 @@ class ListTile extends StatelessWidget {
     ));
 
     if (trailing != null) {
-      children.add(new Container(
-        margin: const EdgeInsets.only(left: 16.0),
-        alignment: FractionalOffset.centerRight,
-        child: trailing,
+      children.add(IconTheme.merge(
+        data: iconThemeData,
+        child: new Container(
+          margin: const EdgeInsetsDirectional.only(start: 16.0),
+          alignment: AlignmentDirectional.centerEnd,
+          child: trailing,
+        ),
       ));
     }
 

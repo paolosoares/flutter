@@ -142,10 +142,8 @@ class ItemListNotifier<T> {
 
     _items = updatedSet;
 
-    for (T item in addedItems)
-      _addedController.add(item);
-    for (T item in removedItems)
-      _removedController.add(item);
+    addedItems.forEach(_addedController.add);
+    removedItems.forEach(_removedController.add);
   }
 
   /// Close the streams.
@@ -255,4 +253,15 @@ class Poller {
     _timer?.cancel();
     _timer = null;
   }
+}
+
+/// Returns a [Future] that completes when all given [Future]s complete.
+///
+/// Uses [Future.wait] but removes null elements from the provided
+/// `futures` iterable first.
+///
+/// The returned [Future<List>] will be shorter than the given `futures` if
+/// it contains nulls.
+Future<List<T>> waitGroup<T>(Iterable<Future<T>> futures) {
+  return Future.wait<T>(futures.where((Future<T> future) => future != null));
 }

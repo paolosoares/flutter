@@ -42,7 +42,7 @@ class TestTextState extends State<TestText> {
 }
 
 void main() {
-  testWidgets('ListTile geometry', (WidgetTester tester) async {
+  testWidgets('ListTile geometry (LTR)', (WidgetTester tester) async {
     // See https://material.io/guidelines/components/lists.html
 
     bool hasSubtitle;
@@ -77,6 +77,8 @@ void main() {
     double right(String text) => tester.getTopRight(find.text(text)).dx;
     double top(String text) => tester.getTopLeft(find.text(text)).dy;
     double bottom(String text) => tester.getBottomLeft(find.text(text)).dy;
+    double width(String text) => tester.getSize(find.text(text)).width;
+    double height(String text) => tester.getSize(find.text(text)).height;
 
     // 16.0 padding to the left and right of the leading and trailing widgets
     void testHorizontalGeometry() {
@@ -86,12 +88,14 @@ void main() {
         expect(left('subtitle'), 72.0);
       expect(left('title'), right('leading') + 16.0);
       expect(right('trailing'), 800.0 - 16.0);
+      expect(width('trailing'), 112.0);
     }
 
     void testVerticalGeometry(double expectedHeight) {
       expect(tester.getSize(find.byType(ListTile)), new Size(800.0, expectedHeight));
       if (hasSubtitle)
         expect(top('subtitle'), bottom('title'));
+      expect(height('trailing'), 14.0); // Fits on one line (doesn't wrap)
     }
 
     await tester.pumpWidget(buildFrame());
@@ -125,6 +129,33 @@ void main() {
     testVerticalGeometry(76.0);
   });
 
+  testWidgets('ListTile geometry (RTL)', (WidgetTester tester) async {
+    await tester.pumpWidget(const Directionality(
+      textDirection: TextDirection.rtl,
+      child: const Material(
+        child: const Center(
+          child: const ListTile(
+            leading: const Text('leading'),
+            title: const Text('title'),
+            trailing: const Text('trailing'),
+          ),
+        ),
+      ),
+    ));
+
+    double left(String text) => tester.getTopLeft(find.text(text)).dx;
+    double right(String text) => tester.getTopRight(find.text(text)).dx;
+
+    void testHorizontalGeometry() {
+      expect(right('leading'), 800.0 - 16.0);
+      expect(right('title'), 800.0 - 72.0);
+      expect(left('leading') - right('title'), 16.0);
+      expect(left('trailing'), 16.0);
+    }
+
+    testHorizontalGeometry();
+  });
+
   testWidgets('ListTile.divideTiles', (WidgetTester tester) async {
     final List<String> titles = <String>[ 'first', 'second', 'third' ];
 
@@ -151,6 +182,8 @@ void main() {
   testWidgets('ListTileTheme', (WidgetTester tester) async {
     final Key titleKey = new UniqueKey();
     final Key subtitleKey = new UniqueKey();
+    final Key leadingKey = new UniqueKey();
+    final Key trailingKey = new UniqueKey();
     ThemeData theme;
 
     Widget buildFrame({
@@ -175,7 +208,8 @@ void main() {
                   return new ListTile(
                     enabled: enabled,
                     selected: selected,
-                    leading: const TestIcon(),
+                    leading: new TestIcon(key: leadingKey),
+                    trailing: new TestIcon(key: trailingKey),
                     title: new TestText('title', key: titleKey),
                     subtitle: new TestText('subtitle', key: subtitleKey),
                   );
@@ -190,35 +224,39 @@ void main() {
     const Color green = const Color(0xFF00FF00);
     const Color red = const Color(0xFFFF0000);
 
-    Color iconColor() => tester.state<TestIconState>(find.byType(TestIcon)).iconTheme.color;
+    Color iconColor(Key key) => tester.state<TestIconState>(find.byKey(key)).iconTheme.color;
     Color textColor(Key key) => tester.state<TestTextState>(find.byKey(key)).textStyle.color;
 
-    // A selected ListTile's leading and text get the primary color by default
+    // A selected ListTile's leading, trailing, and text get the primary color by default
     await(tester.pumpWidget(buildFrame(selected: true)));
     await(tester.pump(const Duration(milliseconds: 300))); // DefaultTextStyle changes animate
-    expect(iconColor(), theme.primaryColor);
+    expect(iconColor(leadingKey), theme.primaryColor);
+    expect(iconColor(trailingKey), theme.primaryColor);
     expect(textColor(titleKey), theme.primaryColor);
     expect(textColor(subtitleKey), theme.primaryColor);
 
-    // A selected ListTile's leading and text get the ListTileTheme's selectedColor
+    // A selected ListTile's leading, trailing, and text get the ListTileTheme's selectedColor
     await(tester.pumpWidget(buildFrame(selected: true, selectedColor: green)));
     await(tester.pump(const Duration(milliseconds: 300))); // DefaultTextStyle changes animate
-    expect(iconColor(), green);
+    expect(iconColor(leadingKey), green);
+    expect(iconColor(trailingKey), green);
     expect(textColor(titleKey), green);
     expect(textColor(subtitleKey), green);
 
-    // An unselected ListTile's leading icon gets the ListTileTheme's iconColor
+    // An unselected ListTile's leading and trailing get the ListTileTheme's iconColor
     // An unselected ListTile's title texts get the ListTileTheme's textColor
     await(tester.pumpWidget(buildFrame(iconColor: red, textColor: green)));
     await(tester.pump(const Duration(milliseconds: 300))); // DefaultTextStyle changes animate
-    expect(iconColor(), red);
+    expect(iconColor(leadingKey), red);
+    expect(iconColor(trailingKey), red);
     expect(textColor(titleKey), green);
     expect(textColor(subtitleKey), green);
 
     // If the item is disabled it's rendered with the theme's disabled color.
     await(tester.pumpWidget(buildFrame(enabled: false)));
     await(tester.pump(const Duration(milliseconds: 300)));  // DefaultTextStyle changes animate
-    expect(iconColor(), theme.disabledColor);
+    expect(iconColor(leadingKey), theme.disabledColor);
+    expect(iconColor(trailingKey), theme.disabledColor);
     expect(textColor(titleKey), theme.disabledColor);
     expect(textColor(subtitleKey), theme.disabledColor);
 
@@ -226,7 +264,8 @@ void main() {
     // Even if it's selected.
     await(tester.pumpWidget(buildFrame(enabled: false, selected: true)));
     await(tester.pump(const Duration(milliseconds: 300)));  // DefaultTextStyle changes animate
-    expect(iconColor(), theme.disabledColor);
+    expect(iconColor(leadingKey), theme.disabledColor);
+    expect(iconColor(trailingKey), theme.disabledColor);
     expect(textColor(titleKey), theme.disabledColor);
     expect(textColor(subtitleKey), theme.disabledColor);
   });

@@ -139,7 +139,7 @@ void main () {
 
 class TestWidget extends StatelessWidget {
 
-  TestWidget({
+  const TestWidget({
     this.tapHandler: nullHandler,
     this.longPressHandler: nullHandler,
   });
@@ -154,7 +154,7 @@ class TestWidget extends StatelessWidget {
     return new GestureDetector(
         onTap: tapHandler(context),
         onLongPress: longPressHandler(context),
-        child: const Text('X'),
+        child: const Text('X', textDirection: TextDirection.ltr),
     );
   }
 }

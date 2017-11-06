@@ -69,7 +69,7 @@ class SingleChildScrollView extends StatelessWidget {
   /// left to right when [reverse] is false and from right to left when
   /// [reverse] is true.
   ///
-  /// Similarly, if [scrollDirection] is [Axis.vertical], then scroll view
+  /// Similarly, if [scrollDirection] is [Axis.vertical], then the scroll view
   /// scrolls from top to bottom when [reverse] is false and from bottom to top
   /// when [reverse] is true.
   ///
@@ -77,7 +77,7 @@ class SingleChildScrollView extends StatelessWidget {
   final bool reverse;
 
   /// The amount of space by which to inset the child.
-  final EdgeInsets padding;
+  final EdgeInsetsGeometry padding;
 
   /// An object that can be used to control the position to which this scroll
   /// view is scrolled.
@@ -99,7 +99,7 @@ class SingleChildScrollView extends StatelessWidget {
   /// On iOS, this identifies the scroll view that will scroll to top in
   /// response to a tap in the status bar.
   ///
-  /// Defaults to true when `scrollDirection` is vertical and `controller` is
+  /// Defaults to true when [scrollDirection] is vertical and [controller] is
   /// not specified.
   final bool primary;
 
@@ -115,14 +115,7 @@ class SingleChildScrollView extends StatelessWidget {
   final Widget child;
 
   AxisDirection _getDirection(BuildContext context) {
-    // TODO(abarth): Consider reading direction.
-    switch (scrollDirection) {
-      case Axis.horizontal:
-        return reverse ? AxisDirection.left : AxisDirection.right;
-      case Axis.vertical:
-        return reverse ? AxisDirection.up : AxisDirection.down;
-    }
-    return null;
+    return getAxisDirectionFromAxisReverseAndDirectionality(context, scrollDirection, reverse);
   }
 
   @override
@@ -212,11 +205,16 @@ class _RenderSingleChildViewport extends RenderBox with RenderObjectWithChildMix
     if (value == _offset)
       return;
     if (attached)
-      _offset.removeListener(markNeedsPaint);
+      _offset.removeListener(_hasScrolled);
     _offset = value;
     if (attached)
-      _offset.addListener(markNeedsPaint);
+      _offset.addListener(_hasScrolled);
     markNeedsLayout();
+  }
+
+  void _hasScrolled() {
+    markNeedsPaint();
+    markNeedsSemanticsUpdate();
   }
 
   @override
@@ -230,12 +228,12 @@ class _RenderSingleChildViewport extends RenderBox with RenderObjectWithChildMix
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
-    _offset.addListener(markNeedsPaint);
+    _offset.addListener(_hasScrolled);
   }
 
   @override
   void detach() {
-    _offset.removeListener(markNeedsPaint);
+    _offset.removeListener(_hasScrolled);
     super.detach();
   }
 

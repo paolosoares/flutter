@@ -15,14 +15,17 @@ void main() {
       final SemanticsTester semantics = new SemanticsTester(tester);
 
       await tester.pumpWidget(new Stack(
+        textDirection: TextDirection.ltr,
         children: <Widget>[
           new Semantics(
             label: 'layer#1',
+            textDirection: TextDirection.ltr,
             child: new Container(),
           ),
           const BlockSemantics(),
           new Semantics(
             label: 'layer#2',
+            textDirection: TextDirection.ltr,
             child: new Container(),
           ),
         ],
@@ -31,9 +34,11 @@ void main() {
       expect(semantics, isNot(includesNodeWith(label: 'layer#1')));
 
       await tester.pumpWidget(new Stack(
+        textDirection: TextDirection.ltr,
         children: <Widget>[
           new Semantics(
             label: 'layer#1',
+            textDirection: TextDirection.ltr,
             child: new Container(),
           ),
         ],
@@ -47,7 +52,7 @@ void main() {
     testWidgets('does not hides semantic nodes of siblings outside the current semantic boundary', (WidgetTester tester) async {
       final SemanticsTester semantics = new SemanticsTester(tester);
 
-      await tester.pumpWidget(new Stack(
+      await tester.pumpWidget(new Directionality(textDirection: TextDirection.ltr, child: new Stack(
         children: <Widget>[
           new Semantics(
             label: '#1',
@@ -56,6 +61,7 @@ void main() {
           new Semantics(
             label: '#2',
             container: true,
+            explicitChildNodes: true,
             child: new Stack(
               children: <Widget>[
                 new Semantics(
@@ -84,7 +90,7 @@ void main() {
             child: new Container(),
           ),
         ],
-      ));
+      )));
 
       expect(semantics, includesNodeWith(label: '#1'));
       expect(semantics, includesNodeWith(label: '#2'));
@@ -101,7 +107,7 @@ void main() {
       final SemanticsTester semantics = new SemanticsTester(tester);
       final GlobalKey stackKey = new GlobalKey();
 
-      await tester.pumpWidget(new Stack(
+      await tester.pumpWidget(new Directionality(textDirection: TextDirection.ltr, child: new Stack(
         key: stackKey,
         children: <Widget>[
           new Semantics(
@@ -119,7 +125,7 @@ void main() {
             child: new Container(),
           ),
         ],
-      ));
+      )));
 
       expect(semantics, isNot(includesNodeWith(label: 'NOT#1')));
       expect(semantics, includesNodeWith(label: '#2.1'));
@@ -141,9 +147,12 @@ class RenderBoundaryBlockSemantics extends RenderProxyBox {
   RenderBoundaryBlockSemantics({ RenderBox child }) : super(child);
 
   @override
-  bool get isBlockingSemanticsOfPreviouslyPaintedNodes => true;
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
 
-  @override
-  bool get isSemanticBoundary => true;
+    config
+      ..isBlockingSemanticsOfPreviouslyPaintedNodes = true
+      ..isSemanticBoundary = true;
+  }
 }
 

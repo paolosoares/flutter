@@ -72,6 +72,10 @@ class ScrollPositionWithSingleContext extends ScrollPosition implements ScrollAc
     assert(activity != null);
   }
 
+  /// Velocity from a previous activity temporarily held by [hold] to potentially
+  /// transfer to a next activity.
+  double _heldPreviousVelocity = 0.0;
+
   @override
   AxisDirection get axisDirection => context.axisDirection;
 
@@ -112,6 +116,7 @@ class ScrollPositionWithSingleContext extends ScrollPosition implements ScrollAc
 
   @override
   void beginActivity(ScrollActivity newActivity) {
+    _heldPreviousVelocity = 0.0;
     if (newActivity == null)
       return;
     assert(newActivity.delegate == this);
@@ -174,6 +179,12 @@ class ScrollPositionWithSingleContext extends ScrollPosition implements ScrollAc
     @required Duration duration,
     @required Curve curve,
   }) {
+    if (nearEqual(to, pixels, physics.tolerance.distance)) {
+      // Skip the animation, go straight to the position as we are already close.
+      jumpTo(to);
+      return new Future<Null>.value();
+    }
+
     final DrivenScrollActivity activity = new DrivenScrollActivity(
       this,
       from: pixels,
@@ -216,12 +227,14 @@ class ScrollPositionWithSingleContext extends ScrollPosition implements ScrollAc
 
   @override
   ScrollHoldController hold(VoidCallback holdCancelCallback) {
-    final HoldScrollActivity activity = new HoldScrollActivity(
+    final double previousVelocity = activity.velocity;
+    final HoldScrollActivity holdActivity = new HoldScrollActivity(
       delegate: this,
       onHoldCanceled: holdCancelCallback,
     );
-    beginActivity(activity);
-    return activity;
+    beginActivity(holdActivity);
+    _heldPreviousVelocity = previousVelocity;
+    return holdActivity;
   }
 
   ScrollDragController _currentDrag;
@@ -232,6 +245,7 @@ class ScrollPositionWithSingleContext extends ScrollPosition implements ScrollAc
       delegate: this,
       details: details,
       onDragCanceled: onDragCanceled,
+      carriedVelocity: physics.carriedMomentum(_heldPreviousVelocity),
     );
     beginActivity(new DragScrollActivity(this, drag));
     assert(_currentDrag == null);

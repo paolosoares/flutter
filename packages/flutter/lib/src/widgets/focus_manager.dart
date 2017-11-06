@@ -129,7 +129,7 @@ class FocusNode extends ChangeNotifier {
 ///    [BuildContext].
 ///  * [FocusScope], which is a widget that associates a [FocusScopeNode] with
 ///    its location in the tree.
-class FocusScopeNode extends Object with TreeDiagnosticsMixin {
+class FocusScopeNode extends Object with DiagnosticableTreeMixin {
   FocusManager _manager;
   FocusScopeNode _parent;
 
@@ -158,7 +158,7 @@ class FocusScopeNode extends Object with TreeDiagnosticsMixin {
         node = node._parent;
       assert(node != child); // indicates we are about to create a cycle
       return true;
-    });
+    }());
     child._parent = this;
     child._nextSibling = _firstChild;
     if (_firstChild != null)
@@ -354,7 +354,7 @@ class FocusScopeNode extends Object with TreeDiagnosticsMixin {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     if (_focus != null)
       description.add(new DiagnosticsProperty<FocusNode>('focus', _focus));
@@ -367,7 +367,7 @@ class FocusScopeNode extends Object with TreeDiagnosticsMixin {
       FocusScopeNode child = _firstChild;
       int count = 1;
       while (true) {
-        children.add(child.toDiagnosticsNode(name: "child $count"));
+        children.add(child.toDiagnosticsNode(name: 'child $count'));
         if (child == _lastChild)
           break;
         child = child._nextSibling;
@@ -456,6 +456,6 @@ class FocusManager {
     final String indent = '  ';
     return '${describeIdentity(this)}$status\n'
       '${indent}currentFocus: $_currentFocus\n'
-      '${rootScope.toStringDeep(indent, indent)}';
+      '${rootScope.toStringDeep(prefixLineOne: indent, prefixOtherLines: indent)}';
   }
 }

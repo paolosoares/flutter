@@ -40,9 +40,9 @@ class TestServiceExtensionsBinding extends BindingBase
 
   int reassembled = 0;
   @override
-  Future<Null> reassembleApplication() {
+  Future<Null> performReassemble() {
     reassembled += 1;
-    return super.reassembleApplication();
+    return super.performReassemble();
   }
 
   bool frameScheduled = false;
@@ -178,11 +178,21 @@ void main() {
     console.clear();
   });
 
-  test('Service extensions - debugDumpSemanticsTree', () async {
+  test('Service extensions - debugDumpSemanticsTreeInTraversalOrder', () async {
     Map<String, String> result;
 
     await binding.doFrame();
-    result = await binding.testExtension('debugDumpSemanticsTree', <String, String>{});
+    result = await binding.testExtension('debugDumpSemanticsTreeInTraversalOrder', <String, String>{});
+    expect(result, <String, String>{});
+    expect(console, <String>['Semantics not collected.']);
+    console.clear();
+  });
+
+  test('Service extensions - debugDumpSemanticsTreeInInverseHitTestOrder', () async {
+    Map<String, String> result;
+
+    await binding.doFrame();
+    result = await binding.testExtension('debugDumpSemanticsTreeInInverseHitTestOrder', <String, String>{});
     expect(result, <String, String>{});
     expect(console, <String>['Semantics not collected.']);
     console.clear();
@@ -433,6 +443,29 @@ void main() {
     expect(binding.frameScheduled, isFalse);
   });
 
+  test('Service extensions - debugWidgetInspector', () async {
+    Map<String, String> result;
+
+    expect(binding.frameScheduled, isFalse);
+    expect(WidgetsApp.debugShowWidgetInspectorOverride, false);
+    result = await binding.testExtension('debugWidgetInspector', <String, String>{});
+    expect(result, <String, String>{ 'enabled': 'false' });
+    expect(WidgetsApp.debugShowWidgetInspectorOverride, false);
+    result = await binding.testExtension('debugWidgetInspector', <String, String>{ 'enabled': 'true' });
+    expect(result, <String, String>{ 'enabled': 'true' });
+    expect(WidgetsApp.debugShowWidgetInspectorOverride, true);
+    result = await binding.testExtension('debugWidgetInspector', <String, String>{});
+    expect(result, <String, String>{ 'enabled': 'true' });
+    expect(WidgetsApp.debugShowWidgetInspectorOverride, true);
+    result = await binding.testExtension('debugWidgetInspector', <String, String>{ 'enabled': 'false' });
+    expect(result, <String, String>{ 'enabled': 'false' });
+    expect(WidgetsApp.debugShowWidgetInspectorOverride, false);
+    result = await binding.testExtension('debugWidgetInspector', <String, String>{});
+    expect(result, <String, String>{ 'enabled': 'false' });
+    expect(WidgetsApp.debugShowWidgetInspectorOverride, false);
+    expect(binding.frameScheduled, isFalse);
+  });
+
   test('Service extensions - timeDilation', () async {
     Map<String, String> result;
 
@@ -459,7 +492,7 @@ void main() {
   test('Service extensions - posttest', () async {
     // If you add a service extension... TEST IT! :-)
     // ...then increment this number.
-    expect(binding.extensions.length, 15);
+    expect(binding.extensions.length, 17);
 
     expect(console, isEmpty);
     debugPrint = debugPrintThrottled;

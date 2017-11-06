@@ -38,6 +38,7 @@ class ExpansionTile extends StatefulWidget {
     this.backgroundColor,
     this.onExpansionChanged,
     this.children: const <Widget>[],
+    this.trailing,
   }) : super(key: key);
 
   /// A widget to display before the title.
@@ -53,7 +54,7 @@ class ExpansionTile extends StatefulWidget {
   /// Called when the tile expands or collapses.
   ///
   /// When the tile starts expanding, this function is called with the value
-  /// `true`. When the tile starts collapsing, this function is called with
+  /// true. When the tile starts collapsing, this function is called with
   /// the value false.
   final ValueChanged<bool> onExpansionChanged;
 
@@ -64,6 +65,9 @@ class ExpansionTile extends StatefulWidget {
 
   /// The color to display behind the sublist when expanded.
   final Color backgroundColor;
+  
+  /// A widget to display instead of a rotating arrow icon.
+  final Widget trailing;
 
   @override
   _ExpansionTileState createState() => new _ExpansionTileState();
@@ -145,7 +149,7 @@ class _ExpansionTileState extends State<ExpansionTile> with SingleTickerProvider
                 style: Theme.of(context).textTheme.subhead.copyWith(color: titleColor),
                 child: widget.title,
               ),
-              trailing: new RotationTransition(
+              trailing: widget.trailing ?? new RotationTransition(
                 turns: _iconTurns,
                 child: const Icon(Icons.expand_more),
               ),

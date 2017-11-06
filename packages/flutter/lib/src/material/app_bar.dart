@@ -15,6 +15,7 @@ import 'flexible_space_bar.dart';
 import 'icon_button.dart';
 import 'icons.dart';
 import 'material.dart';
+import 'material_localizations.dart';
 import 'page.dart';
 import 'scaffold.dart';
 import 'tabs.dart';
@@ -147,11 +148,13 @@ class AppBar extends StatefulWidget implements PreferredSizeWidget {
     this.textTheme,
     this.primary: true,
     this.centerTitle,
+    this.titleSpacing: NavigationToolbar.kMiddleSpacing,
     this.toolbarOpacity: 1.0,
     this.bottomOpacity: 1.0,
   }) : assert(automaticallyImplyLeading != null),
        assert(elevation != null),
        assert(primary != null),
+       assert(titleSpacing != null),
        assert(toolbarOpacity != null),
        assert(bottomOpacity != null),
        preferredSize = new Size.fromHeight(kToolbarHeight + (bottom?.preferredSize?.height ?? 0.0)),
@@ -267,6 +270,13 @@ class AppBar extends StatefulWidget implements PreferredSizeWidget {
   /// Defaults to being adapted to the current [TargetPlatform].
   final bool centerTitle;
 
+  /// The spacing around [title] content on the horizontal axis. This spacing is
+  /// applied even if there is no [leading] content or [actions]. If you want
+  /// [title] to take all the space available, set this value to 0.0.
+  ///
+  /// Defaults to [NavigationToolbar.kMiddleSpacing].
+  final double titleSpacing;
+
   /// How opaque the toolbar part of the app bar is.
   ///
   /// A value of 1.0 is fully opaque, and a value of 0.0 is fully transparent.
@@ -315,6 +325,10 @@ class _AppBarState extends State<AppBar> {
     Scaffold.of(context).openDrawer();
   }
 
+  void _handleDrawerButtonEnd() {
+    Scaffold.of(context).openEndDrawer();
+  }
+
   @override
   Widget build(BuildContext context) {
     assert(!widget.primary || debugCheckHasMediaQuery(context));
@@ -323,6 +337,7 @@ class _AppBarState extends State<AppBar> {
     final ModalRoute<dynamic> parentRoute = ModalRoute.of(context);
 
     final bool hasDrawer = scaffold?.hasDrawer ?? false;
+    final bool hasEndDrawer = scaffold?.hasEndDrawer ?? false;
     final bool canPop = parentRoute?.canPop ?? false;
     final bool useCloseButton = parentRoute is MaterialPageRoute<dynamic> && parentRoute.fullscreenDialog;
 
@@ -352,7 +367,7 @@ class _AppBarState extends State<AppBar> {
         leading = new IconButton(
           icon: const Icon(Icons.menu),
           onPressed: _handleDrawerButton,
-          tooltip: 'Open navigation menu' // TODO(ianh): Figure out how to localize this string
+          tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
         );
       } else {
         if (canPop)
@@ -383,15 +398,22 @@ class _AppBarState extends State<AppBar> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: widget.actions,
       );
+    } else if (hasEndDrawer) {
+      actions = new IconButton(
+        icon: const Icon(Icons.menu),
+        onPressed: _handleDrawerButtonEnd,
+        tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
+      );      
     }
 
     final Widget toolbar = new Padding(
-      padding: const EdgeInsets.only(right: 4.0),
+      padding: const EdgeInsetsDirectional.only(end: 4.0),
       child: new NavigationToolbar(
         leading: leading,
         middle: title,
         trailing: actions,
         centerMiddle: widget._getEffectiveCenterTitle(themeData),
+        middleSpacing: widget.titleSpacing,
       ),
     );
 
@@ -430,14 +452,14 @@ class _AppBarState extends State<AppBar> {
 
     // The padding applies to the toolbar and tabbar, not the flexible space.
     if (widget.primary) {
-      appBar = new Padding(
-        padding: new EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+      appBar = new SafeArea(
+        top: true,
         child: appBar,
       );
     }
 
     appBar = new Align(
-      alignment: FractionalOffset.topCenter,
+      alignment: Alignment.topCenter,
       child: appBar,
     );
 
@@ -527,6 +549,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
     @required this.textTheme,
     @required this.primary,
     @required this.centerTitle,
+    @required this.titleSpacing,
     @required this.expandedHeight,
     @required this.collapsedHeight,
     @required this.topPadding,
@@ -550,6 +573,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   final TextTheme textTheme;
   final bool primary;
   final bool centerTitle;
+  final double titleSpacing;
   final double expandedHeight;
   final double collapsedHeight;
   final double topPadding;
@@ -591,6 +615,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
         textTheme: textTheme,
         primary: primary,
         centerTitle: centerTitle,
+        titleSpacing: titleSpacing,
         toolbarOpacity: toolbarOpacity,
         bottomOpacity: pinned ? 1.0 : (visibleMainHeight / _bottomHeight).clamp(0.0, 1.0),
       ),
@@ -614,6 +639,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
         || textTheme != oldDelegate.textTheme
         || primary != oldDelegate.primary
         || centerTitle != oldDelegate.centerTitle
+        || titleSpacing != oldDelegate.titleSpacing
         || expandedHeight != oldDelegate.expandedHeight
         || topPadding != oldDelegate.topPadding
         || pinned != oldDelegate.pinned
@@ -698,6 +724,7 @@ class SliverAppBar extends StatefulWidget {
     this.textTheme,
     this.primary: true,
     this.centerTitle,
+    this.titleSpacing: NavigationToolbar.kMiddleSpacing,
     this.expandedHeight,
     this.floating: false,
     this.pinned: false,
@@ -705,9 +732,9 @@ class SliverAppBar extends StatefulWidget {
   }) : assert(automaticallyImplyLeading != null),
        assert(forceElevated != null),
        assert(primary != null),
+       assert(titleSpacing != null),
        assert(floating != null),
        assert(pinned != null),
-       assert(!pinned || !floating || bottom != null, 'A pinned and floating app bar must have a bottom widget.'),
        assert(snap != null),
        assert(floating || !snap, 'The "snap" argument only makes sense for floating app bars.'),
        super(key: key);
@@ -840,6 +867,13 @@ class SliverAppBar extends StatefulWidget {
   /// Defaults to being adapted to the current [TargetPlatform].
   final bool centerTitle;
 
+  /// The spacing around [title] content on the horizontal axis. This spacing is
+  /// applied even if there is no [leading] content or [actions]. If you want
+  /// [title] to take all the space available, set this value to 0.0.
+  ///
+  /// Defaults to [NavigationToolbar.kMiddleSpacing].
+  final double titleSpacing;
+
   /// The size of the app bar when it is fully expanded.
   ///
   /// By default, the total height of the toolbar and the bottom widget (if
@@ -938,6 +972,7 @@ class _SliverAppBarState extends State<SliverAppBar> with TickerProviderStateMix
         textTheme: widget.textTheme,
         primary: widget.primary,
         centerTitle: widget.centerTitle,
+        titleSpacing: widget.titleSpacing,
         expandedHeight: widget.expandedHeight,
         collapsedHeight: collapsedHeight,
         topPadding: topPadding,

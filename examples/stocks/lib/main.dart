@@ -13,15 +13,25 @@ import 'package:flutter/rendering.dart' show
   debugPaintLayerBordersEnabled,
   debugPaintPointersEnabled,
   debugRepaintRainbowEnabled;
-import 'package:intl/intl.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'i18n/stock_messages_all.dart';
 import 'stock_data.dart';
 import 'stock_home.dart';
 import 'stock_settings.dart';
 import 'stock_strings.dart';
 import 'stock_symbol_viewer.dart';
 import 'stock_types.dart';
+
+class _StocksLocalizationsDelegate extends LocalizationsDelegate<StockStrings> {
+  @override
+  Future<StockStrings> load(Locale locale) => StockStrings.load(locale);
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'es' || locale.languageCode == 'en';
+
+  @override
+  bool shouldReload(_StocksLocalizationsDelegate old) => false;
+}
 
 class StocksApp extends StatefulWidget {
   @override
@@ -99,13 +109,6 @@ class StocksAppState extends State<StocksApp> {
     return null;
   }
 
-  Future<LocaleQueryData> _onLocaleChanged(Locale locale) async {
-    final String localeString = locale.toString();
-    await initializeMessages(localeString);
-    Intl.defaultLocale = localeString;
-    return StockStrings.instance;
-  }
-
   @override
   Widget build(BuildContext context) {
     assert(() {
@@ -115,10 +118,19 @@ class StocksAppState extends State<StocksApp> {
       debugPaintPointersEnabled = _configuration.debugShowPointers;
       debugRepaintRainbowEnabled = _configuration.debugShowRainbow;
       return true;
-    });
+    }());
     return new MaterialApp(
       title: 'Stocks',
       theme: theme,
+      localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+        new _StocksLocalizationsDelegate(),
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
+      supportedLocales: const <Locale>[
+        const Locale('en', 'US'),
+        const Locale('es', 'ES'),
+      ],
       debugShowMaterialGrid: _configuration.debugShowGrid,
       showPerformanceOverlay: _configuration.showPerformanceOverlay,
       showSemanticsDebugger: _configuration.showSemanticsDebugger,
@@ -127,7 +139,6 @@ class StocksAppState extends State<StocksApp> {
          '/settings': (BuildContext context) => new StockSettings(_configuration, configurationUpdater)
       },
       onGenerateRoute: _getRoute,
-      onLocaleChanged: _onLocaleChanged
     );
   }
 }

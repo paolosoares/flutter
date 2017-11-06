@@ -434,10 +434,10 @@ class _EqualsIgnoringHashCodes extends Matcher {
   }
 }
 
-/// Returns `true` if [c] represents a whitespace code unit.
+/// Returns true if [c] represents a whitespace code unit.
 bool _isWhitespace(int c) => (c <= 0x000D && c >= 0x0009) || c == 0x0020;
 
-/// Returns `true` if [c] represents a vertical line unicode line art code unit.
+/// Returns true if [c] represents a vertical line unicode line art code unit.
 ///
 /// See [https://en.wikipedia.org/wiki/Box-drawing_character]. This method only
 /// specifies vertical line art code units currently used by Flutter line art.
@@ -507,7 +507,7 @@ class _HasGoodToStringDeep extends Matcher {
     final String prefixOtherLines = 'PREFIX_OTHER_LINES_';
     final List<String> prefixIssues = <String>[];
     String descriptionWithPrefixes =
-        object.toStringDeep(prefixLineOne, prefixOtherLines);
+        object.toStringDeep(prefixLineOne: prefixLineOne, prefixOtherLines: prefixOtherLines);
     if (descriptionWithPrefixes.endsWith('\n')) {
       // Trim off trailing \n as the remaining calculations assume
       // the description does not end with a trailing \n.
@@ -532,7 +532,7 @@ class _HasGoodToStringDeep extends Matcher {
 
     if (prefixIssues.isNotEmpty) {
       errorDescription.writeln(
-          'Bad toStringDeep("$prefixLineOne", "$prefixOtherLines"):');
+          'Bad toStringDeep(prefixLineOne: "$prefixLineOne", prefixOtherLines: "$prefixOtherLines"):');
       errorDescription.writeln(descriptionWithPrefixes);
       errorDescription.writeAll(prefixIssues, '\n');
     }

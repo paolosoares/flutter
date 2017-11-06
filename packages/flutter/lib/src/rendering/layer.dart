@@ -10,9 +10,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:vector_math/vector_math_64.dart';
 
-import 'debug.dart';
-import 'node.dart';
-
 /// A composited layer.
 ///
 /// During painting, the render tree generates a tree of composited layers that
@@ -31,8 +28,8 @@ import 'node.dart';
 /// See also:
 ///
 ///  * [RenderView.compositeFrame], which implements this recomposition protocol
-///    for painting [RenderObject] trees on the the display.
-abstract class Layer extends AbstractNode with TreeDiagnosticsMixin {
+///    for painting [RenderObject] trees on the display.
+abstract class Layer extends AbstractNode with DiagnosticableTreeMixin {
   /// This layer's parent in the layer tree.
   ///
   /// The [parent] of the root node in the layer tree is null.
@@ -76,7 +73,7 @@ abstract class Layer extends AbstractNode with TreeDiagnosticsMixin {
         node = node.parent;
       assert(node != newLayer); // indicates we are about to create a cycle
       return true;
-    });
+    }());
     parent.adoptChild(newLayer);
     assert(newLayer.attached == parent.attached);
     if (parent.firstChild == this)
@@ -102,13 +99,13 @@ abstract class Layer extends AbstractNode with TreeDiagnosticsMixin {
   dynamic debugCreator;
 
   @override
-  String toString() => '${super.toString()}${ owner == null ? " DETACHED" : ""}';
+  String toStringShort() => '${super.toStringShort()}${ owner == null ? " DETACHED" : ""}';
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
-    description.add(new DiagnosticsProperty<Object>('owner', owner, hidden: parent != null, defaultValue: null));
-    description.add(new DiagnosticsProperty<dynamic>('creator', debugCreator, defaultValue: null));
+    description.add(new DiagnosticsProperty<Object>('owner', owner, level: parent != null ? DiagnosticLevel.hidden : DiagnosticLevel.info, defaultValue: null));
+    description.add(new DiagnosticsProperty<dynamic>('creator', debugCreator, defaultValue: null, level: DiagnosticLevel.debug));
   }
 }
 
@@ -129,7 +126,7 @@ class PictureLayer extends Layer {
 
   /// The picture recorded for this layer.
   ///
-  /// The picture's coodinate system matches this layer's coodinate system.
+  /// The picture's coordinate system matches this layer's coordinate system.
   ///
   /// The scene must be explicitly recomposited after this property is changed
   /// (as described at [Layer]).
@@ -162,9 +159,61 @@ class PictureLayer extends Layer {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<Rect>('paint bounds', canvasBounds));
+  }
+}
+
+/// A composited layer that maps a backend texture to a rectangle.
+///
+/// Backend textures are images that can be applied (mapped) to an area of the
+/// Flutter view. They are created, managed, and updated using a
+/// platform-specific texture registry. This is typically done by a plugin
+/// that integrates with host platform video player, camera, or OpenGL APIs,
+/// or similar image sources.
+///
+/// A texture layer refers to its backend texture using an integer ID. Texture
+/// IDs are obtained from the texture registry and are scoped to the Flutter
+/// view. Texture IDs may be reused after deregistration, at the discretion
+/// of the registry. The use of texture IDs currently unknown to the registry
+/// will silently result in a blank rectangle.
+///
+/// Once inserted into the layer tree, texture layers are repainted autonomously
+/// as dictated by the backend (e.g. on arrival of a video frame). Such
+/// repainting generally does not involve executing Dart code.
+///
+/// Texture layers are always leaves in the layer tree.
+///
+/// See also:
+///
+/// * <https://docs.flutter.io/javadoc/io/flutter/view/TextureRegistry.html>
+///   for how to create and manage backend textures on Android.
+/// * <https://docs.flutter.io/objcdoc/Protocols/FlutterTextureRegistry.html>
+///   for how to create and manage backend textures on iOS.
+class TextureLayer extends Layer {
+  /// Creates a texture layer bounded by [rect] and with backend texture
+  /// identified by [textureId].
+  TextureLayer({
+    @required this.rect,
+    @required this.textureId,
+  }): assert(rect != null), assert(textureId != null);
+
+  /// Bounding rectangle of this layer.
+  final Rect rect;
+
+  /// The identity of the backend texture.
+  final int textureId;
+
+  @override
+  void addToScene(ui.SceneBuilder builder, Offset layerOffset) {
+    final Rect shiftedRect = rect.shift(layerOffset);
+    builder.addTexture(
+      textureId,
+      offset: shiftedRect.topLeft,
+      width: shiftedRect.width,
+      height: shiftedRect.height,
+    );
   }
 }
 
@@ -299,7 +348,7 @@ class ContainerLayer extends Layer {
         node = node.parent;
       assert(node != child); // indicates we are about to create a cycle
       return true;
-    });
+    }());
     adoptChild(child);
     child._previousSibling = lastChild;
     if (lastChild != null)
@@ -460,7 +509,7 @@ class OffsetLayer extends ContainerLayer {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<Offset>('offset', offset));
   }
@@ -488,7 +537,7 @@ class ClipRectLayer extends ContainerLayer {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<Rect>('clipRect', clipRect));
   }
@@ -516,7 +565,7 @@ class ClipRRectLayer extends ContainerLayer {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<RRect>('clipRRect', clipRRect));
   }
@@ -544,7 +593,7 @@ class ClipPathLayer extends ContainerLayer {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<Path>('clipPath', clipPath));
   }
@@ -596,7 +645,7 @@ class TransformLayer extends OffsetLayer {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new TransformProperty('transform', transform));
   }
@@ -627,7 +676,7 @@ class OpacityLayer extends ContainerLayer {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new IntProperty('alpha', alpha));
   }
@@ -667,7 +716,7 @@ class ShaderMaskLayer extends ContainerLayer {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<Shader>('shader', shader));
     description.add(new DiagnosticsProperty<Rect>('maskRect', maskRect));
@@ -745,7 +794,7 @@ class PhysicalModelLayer extends ContainerLayer {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<RRect>('clipRRect', clipRRect));
     description.add(new DoubleProperty('elevation', elevation));
@@ -854,7 +903,7 @@ class LeaderLayer extends ContainerLayer {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<Offset>('offset', offset));
     description.add(new DiagnosticsProperty<LayerLink>('link', link));
@@ -1043,7 +1092,7 @@ class FollowerLayer extends ContainerLayer {
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<LayerLink>('link', link));
     description.add(new TransformProperty('transform', getLastTransform(), defaultValue: null));

@@ -12,15 +12,21 @@ import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/commands/create.dart';
 import 'package:flutter_tools/src/dart/sdk.dart';
+import 'package:flutter_tools/src/version.dart';
+import 'package:mockito/mockito.dart';
 import 'package:test/test.dart';
 
 import '../src/common.dart';
 import '../src/context.dart';
 
+const String frameworkRevision = '12345678';
+const String frameworkChannel = 'omega';
+
 void main() {
   group('create', () {
     Directory temp;
     Directory projectDir;
+    FlutterVersion mockFlutterVersion;
 
     setUpAll(() {
       Cache.disableLocking();
@@ -29,6 +35,7 @@ void main() {
     setUp(() {
       temp = fs.systemTempDirectory.createTempSync('flutter_tools');
       projectDir = temp.childDirectory('flutter_project');
+      mockFlutterVersion = new MockFlutterVersion();
     });
 
     tearDown(() {
@@ -46,15 +53,16 @@ void main() {
           'ios/Runner/AppDelegate.m',
           'ios/Runner/main.m',
           'lib/main.dart',
-          'test/widget_test.dart'
+          'test/widget_test.dart',
+          'flutter_project.iml',
         ],
       );
-    });
+    }, timeout: const Timeout.factor(2.0));
 
     testUsingContext('kotlin/swift project', () async {
-      return _createAndAnalyzeProject(
+      return _createProject(
         projectDir,
-        <String>['--android-language', 'kotlin', '-i', 'swift'],
+        <String>['--no-pub', '--android-language', 'kotlin', '-i', 'swift'],
         <String>[
           'android/app/src/main/kotlin/com/yourcompany/flutterproject/MainActivity.kt',
           'ios/Runner/AppDelegate.swift',
@@ -70,10 +78,37 @@ void main() {
       );
     });
 
+    testUsingContext('package project', () async {
+      return _createAndAnalyzeProject(
+        projectDir,
+        <String>['--template=package'],
+        <String>[
+          'lib/flutter_project.dart',
+          'test/flutter_project_test.dart',
+        ],
+        unexpectedPaths: <String>[
+          'android/app/src/main/java/com/yourcompany/flutterproject/MainActivity.java',
+          'android/src/main/java/com/yourcompany/flutterproject/FlutterProjectPlugin.java',
+          'ios/Classes/FlutterProjectPlugin.h',
+          'ios/Classes/FlutterProjectPlugin.m',
+          'ios/Runner/AppDelegate.h',
+          'ios/Runner/AppDelegate.m',
+          'ios/Runner/main.m',
+          'lib/main.dart',
+          'example/android/app/src/main/java/com/yourcompany/flutterprojectexample/MainActivity.java',
+          'example/ios/Runner/AppDelegate.h',
+          'example/ios/Runner/AppDelegate.m',
+          'example/ios/Runner/main.m',
+          'example/lib/main.dart',
+          'test/widget_test.dart',
+        ],
+      );
+    }, timeout: const Timeout.factor(2.0));
+
     testUsingContext('plugin project', () async {
       return _createAndAnalyzeProject(
         projectDir,
-        <String>['--plugin'],
+        <String>['--template=plugin'],
         <String>[
           'android/src/main/java/com/yourcompany/flutterproject/FlutterProjectPlugin.java',
           'ios/Classes/FlutterProjectPlugin.h',
@@ -84,15 +119,16 @@ void main() {
           'example/ios/Runner/AppDelegate.m',
           'example/ios/Runner/main.m',
           'example/lib/main.dart',
+          'flutter_project.iml',
         ],
         plugin: true,
       );
-    });
+    }, timeout: const Timeout.factor(2.0));
 
     testUsingContext('kotlin/swift plugin project', () async {
-      return _createAndAnalyzeProject(
+      return _createProject(
         projectDir,
-        <String>['--plugin', '-a', 'kotlin', '--ios-language', 'swift'],
+        <String>['--no-pub', '--template=plugin', '-a', 'kotlin', '--ios-language', 'swift'],
         <String>[
           'android/src/main/kotlin/com/yourcompany/flutterproject/FlutterProjectPlugin.kt',
           'ios/Classes/FlutterProjectPlugin.h',
@@ -116,9 +152,9 @@ void main() {
     });
 
     testUsingContext('plugin project with custom org', () async {
-      return _createAndAnalyzeProject(
+      return _createProject(
           projectDir,
-          <String>['--plugin', '--org', 'com.bar.foo'],
+          <String>['--no-pub', '--template=plugin', '--org', 'com.bar.foo'],
           <String>[
             'android/src/main/java/com/bar/foo/flutterproject/FlutterProjectPlugin.java',
             'example/android/app/src/main/java/com/bar/foo/flutterprojectexample/MainActivity.java',
@@ -137,11 +173,13 @@ void main() {
         <String>['--with-driver-test'],
         <String>['lib/main.dart'],
       );
-    });
+    }, timeout: const Timeout.factor(2.0));
 
     // Verify content and formatting
     testUsingContext('content', () async {
       Cache.flutterRoot = '../..';
+      when(mockFlutterVersion.frameworkRevision).thenReturn(frameworkRevision);
+      when(mockFlutterVersion.channel).thenReturn(frameworkChannel);
 
       final CreateCommand command = new CreateCommand();
       final CommandRunner<Null> runner = createTestCommandRunner(command);
@@ -200,6 +238,16 @@ void main() {
       final File xcodeProjectFile = fs.file(fs.path.join(projectDir.path, xcodeProjectPath));
       final String xcodeProject = xcodeProjectFile.readAsStringSync();
       expect(xcodeProject, contains('PRODUCT_BUNDLE_IDENTIFIER = com.foo.bar.flutterProject'));
+
+      final String versionPath = fs.path.join('.metadata');
+      expectExists(versionPath);
+      final String version = fs.file(fs.path.join(projectDir.path, versionPath)).readAsStringSync();
+      expect(version, contains('version:'));
+      expect(version, contains('revision: 12345678'));
+      expect(version, contains('channel: omega'));
+    },
+    overrides: <Type, Generator>{
+      FlutterVersion: () => mockFlutterVersion,
     });
 
     // Verify that we can regenerate over an existing project.
@@ -232,7 +280,7 @@ void main() {
       Cache.flutterRoot = '../..';
       final CreateCommand command = new CreateCommand();
       final CommandRunner<Null> runner = createTestCommandRunner(command);
-      final File existingFile = fs.file("${projectDir.path.toString()}/bad");
+      final File existingFile = fs.file('${projectDir.path.toString()}/bad');
       if (!existingFile.existsSync())
         existingFile.createSync(recursive: true);
       expect(
@@ -253,9 +301,9 @@ void main() {
   });
 }
 
-Future<Null> _createAndAnalyzeProject(
+Future<Null> _createProject(
     Directory dir, List<String> createArgs, List<String> expectedPaths,
-    { List<String> unexpectedPaths = const <String>[], bool plugin = false }) async {
+    { List<String> unexpectedPaths = const <String>[], bool plugin = false}) async {
   Cache.flutterRoot = '../..';
   final CreateCommand command = new CreateCommand();
   final CommandRunner<Null> runner = createTestCommandRunner(command);
@@ -270,16 +318,21 @@ Future<Null> _createAndAnalyzeProject(
   for (String path in unexpectedPaths) {
     expect(fs.file(fs.path.join(dir.path, path)).existsSync(), false, reason: '$path exists');
   }
+}
 
+Future<Null> _createAndAnalyzeProject(
+    Directory dir, List<String> createArgs, List<String> expectedPaths,
+    { List<String> unexpectedPaths = const <String>[], bool plugin = false }) async {
+  await _createProject(dir, createArgs, expectedPaths, unexpectedPaths: unexpectedPaths, plugin: plugin);
   if (plugin) {
-    _analyze(dir.path, target: fs.path.join(dir.path, 'lib', 'flutter_project.dart'));
-    _analyze(fs.path.join(dir.path, 'example'));
+    await _analyzeProject(dir.path, target: fs.path.join(dir.path, 'lib', 'flutter_project.dart'));
+    await _analyzeProject(fs.path.join(dir.path, 'example'));
   } else {
-    _analyze(dir.path);
+    await _analyzeProject(dir.path);
   }
 }
 
-void _analyze(String workingDir, {String target}) {
+Future<Null> _analyzeProject(String workingDir, {String target}) async {
   final String flutterToolsPath = fs.path.absolute(fs.path.join(
     'bin',
     'flutter_tools.dart',
@@ -289,7 +342,7 @@ void _analyze(String workingDir, {String target}) {
   if (target != null)
     args.add(target);
 
-  final ProcessResult exec = Process.runSync(
+  final ProcessResult exec = await Process.run(
     '$dartSdkPath/bin/dart',
     args,
     workingDirectory: workingDir,
@@ -300,3 +353,5 @@ void _analyze(String workingDir, {String target}) {
   }
   expect(exec.exitCode, 0);
 }
+
+class MockFlutterVersion extends Mock implements FlutterVersion {}

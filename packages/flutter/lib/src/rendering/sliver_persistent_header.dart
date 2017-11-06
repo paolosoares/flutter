@@ -8,11 +8,13 @@ import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/semantics.dart';
 import 'package:vector_math/vector_math_64.dart';
 
 import 'binding.dart';
 import 'box.dart';
 import 'object.dart';
+import 'proxy_box.dart';
 import 'sliver.dart';
 import 'viewport_offset.dart';
 
@@ -136,7 +138,7 @@ abstract class RenderSliverPersistentHeader extends RenderSliver with RenderObje
         'The specified maxExtent was: ${maxExtent.toStringAsFixed(1)}\n'
         'The specified minExtent was: ${minExtent.toStringAsFixed(1)}\n'
       );
-    });
+    }());
     child?.layout(
       constraints.asBoxConstraints(maxExtent: math.max(minExtent, maxExtent - shrinkOffset)),
       parentUsesSize: true,
@@ -203,8 +205,31 @@ abstract class RenderSliverPersistentHeader extends RenderSliver with RenderObje
     }
   }
 
+  /// Whether the [SemanticsNode]s associated with this [RenderSliver] should
+  /// be excluded from the semantic scrolling area.
+  ///
+  /// [RenderSliver]s that stay on the screen even though the user has scrolled
+  /// past them (e.g. a pinned app bar) should set this to true.
+  @protected
+  bool get excludeFromSemanticsScrolling => _excludeFromSemanticsScrolling;
+  bool _excludeFromSemanticsScrolling = false;
+  set excludeFromSemanticsScrolling(bool value) {
+    if (_excludeFromSemanticsScrolling == value)
+      return;
+    _excludeFromSemanticsScrolling = value;
+    markNeedsSemanticsUpdate();
+  }
+
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
+
+    if (_excludeFromSemanticsScrolling)
+      config.addTagForChildren(RenderSemanticsGestureHandler.excludeFromScrolling);
+  }
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DoubleProperty.lazy('maxExtent', () => maxExtent));
     description.add(new DoubleProperty.lazy('child position', () => childMainAxisPosition(child)));
@@ -264,13 +289,16 @@ abstract class RenderSliverPinnedPersistentHeader extends RenderSliverPersistent
   @override
   void performLayout() {
     final double maxExtent = this.maxExtent;
-    layoutChild(constraints.scrollOffset, maxExtent, overlapsContent: constraints.overlap > 0.0);
+    final bool overlapsContent = constraints.overlap > 0.0;
+    excludeFromSemanticsScrolling = overlapsContent || (constraints.scrollOffset > maxExtent - minExtent);
+    layoutChild(constraints.scrollOffset, maxExtent, overlapsContent: overlapsContent);
     geometry = new SliverGeometry(
       scrollExtent: maxExtent,
       paintOrigin: constraints.overlap,
       paintExtent: math.min(childExtent, constraints.remainingPaintExtent),
       layoutExtent: (maxExtent - constraints.scrollOffset).clamp(0.0, constraints.remainingPaintExtent),
       maxPaintExtent: maxExtent,
+      maxScrollObstructionExtent: minExtent,
       hasVisualOverflow: true, // Conservatively say we do have overflow to avoid complexity.
     );
   }
@@ -384,6 +412,7 @@ abstract class RenderSliverFloatingPersistentHeader extends RenderSliverPersiste
       paintExtent: paintExtent.clamp(0.0, constraints.remainingPaintExtent),
       layoutExtent: layoutExtent.clamp(0.0, constraints.remainingPaintExtent),
       maxPaintExtent: maxExtent,
+      maxScrollObstructionExtent: maxExtent,
       hasVisualOverflow: true, // Conservatively say we do have overflow to avoid complexity.
     );
     return math.min(0.0, paintExtent - childExtent);
@@ -445,7 +474,9 @@ abstract class RenderSliverFloatingPersistentHeader extends RenderSliverPersiste
     } else {
       _effectiveScrollOffset = constraints.scrollOffset;
     }
-    layoutChild(_effectiveScrollOffset, maxExtent, overlapsContent: _effectiveScrollOffset < constraints.scrollOffset);
+    final bool overlapsContent = _effectiveScrollOffset < constraints.scrollOffset;
+    excludeFromSemanticsScrolling = overlapsContent;
+    layoutChild(_effectiveScrollOffset, maxExtent, overlapsContent: overlapsContent);
     _childPosition = updateGeometry();
     _lastActualScrollOffset = constraints.scrollOffset;
   }
@@ -457,7 +488,7 @@ abstract class RenderSliverFloatingPersistentHeader extends RenderSliverPersiste
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DoubleProperty('effective scroll offset', _effectiveScrollOffset));
   }
@@ -482,7 +513,7 @@ abstract class RenderSliverFloatingPinnedPersistentHeader extends RenderSliverFl
 
   @override
   double updateGeometry() {
-    final double minExtent = this.maxExtent;
+    final double minExtent = this.minExtent;
     final double maxExtent = this.maxExtent;
     final double paintExtent = (maxExtent - _effectiveScrollOffset);
     final double layoutExtent = (maxExtent - constraints.scrollOffset);
@@ -491,6 +522,7 @@ abstract class RenderSliverFloatingPinnedPersistentHeader extends RenderSliverFl
       paintExtent: paintExtent.clamp(minExtent, constraints.remainingPaintExtent),
       layoutExtent: layoutExtent.clamp(0.0, constraints.remainingPaintExtent - minExtent),
       maxPaintExtent: maxExtent,
+      maxScrollObstructionExtent: maxExtent,
       hasVisualOverflow: true, // Conservatively say we do have overflow to avoid complexity.
     );
     return 0.0;

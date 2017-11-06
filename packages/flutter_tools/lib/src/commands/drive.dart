@@ -8,7 +8,6 @@ import '../application_package.dart';
 import '../base/common.dart';
 import '../base/file_system.dart';
 import '../base/process.dart';
-import '../build_info.dart';
 import '../cache.dart';
 import '../dart/package_map.dart';
 import '../dart/sdk.dart';
@@ -28,7 +27,7 @@ import 'run.dart';
 /// as the `--target` option (defaults to `lib/main.dart`). It then looks for a
 /// corresponding test file within the `test_driver` directory. The test file is
 /// expected to have the same name but contain the `_test.dart` suffix. The
-/// `_test.dart` file would generall be a Dart program that uses
+/// `_test.dart` file would generally be a Dart program that uses
 /// `package:flutter_driver` and exercises your application. Most commonly it
 /// is a test written using `package:test`, but you are free to use something
 /// else.
@@ -39,6 +38,8 @@ import 'run.dart';
 /// exit code.
 class DriveCommand extends RunCommandBase {
   DriveCommand() {
+    requiresPubspecYaml();
+
     argParser.addFlag(
       'keep-app-running',
       defaultsTo: null,
@@ -91,12 +92,6 @@ class DriveCommand extends RunCommandBase {
   StreamSubscription<String> _deviceLogSubscription;
 
   @override
-  Future<Null> verifyThenRunCommand() async {
-    commandValidator();
-    return super.verifyThenRunCommand();
-  }
-
-  @override
   Future<Null> runCommand() async {
     final String testFile = _getTestFile();
     if (testFile == null)
@@ -113,7 +108,7 @@ class DriveCommand extends RunCommandBase {
     if (argResults['use-existing-app'] == null) {
       printStatus('Starting application: $targetFile');
 
-      if (getBuildMode() == BuildMode.release) {
+      if (getBuildInfo().isRelease) {
         // This is because we need VM service to be able to drive the app.
         throwToolExit(
           'Flutter Driver does not support running in release mode.\n'
@@ -267,14 +262,12 @@ Future<LaunchResult> _startApp(DriveCommand command) async {
 
   final LaunchResult result = await command.device.startApp(
     package,
-    command.getBuildMode(),
     mainPath: mainPath,
     route: command.route,
     debuggingOptions: new DebuggingOptions.enabled(
-      command.getBuildMode(),
+      command.getBuildInfo(),
       startPaused: true,
       observatoryPort: command.observatoryPort,
-      diagnosticPort: command.diagnosticPort,
     ),
     platformArgs: platformArgs,
     usesTerminalUi: false,

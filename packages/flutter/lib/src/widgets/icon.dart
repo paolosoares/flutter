@@ -5,6 +5,7 @@
 import 'package:flutter/rendering.dart';
 
 import 'basic.dart';
+import 'debug.dart';
 import 'framework.dart';
 import 'icon_data.dart';
 import 'icon_theme.dart';
@@ -16,6 +17,10 @@ import 'icon_theme_data.dart';
 ///
 /// Icons are not interactive. For an interactive icon, consider material's
 /// [IconButton].
+///
+/// There must be an ambient [Directionality] widget when using [Icon].
+/// Typically this is introduced automatically by the [WidgetsApp] or
+/// [MaterialApp].
 ///
 /// See also:
 ///
@@ -30,7 +35,8 @@ class Icon extends StatelessWidget {
   const Icon(this.icon, {
     Key key,
     this.size,
-    this.color
+    this.color,
+    this.semanticLabel,
   }) : super(key: key);
 
   /// The icon to display. The available icons are described in [Icons].
@@ -78,43 +84,66 @@ class Icon extends StatelessWidget {
   /// ```
   final Color color;
 
+  /// Semantic label for the icon.
+  ///
+  /// This would be read out in accessibility modes (e.g TalkBack/VoiceOver).
+  /// This label does not show in the UI.
+  ///
+  /// See also:
+  ///
+  ///  * [Semantics.label] which is set with [semanticLabel] in the underlying
+  ///    [Semantics] widget.
+  final String semanticLabel;
+
   @override
   Widget build(BuildContext context) {
+    assert(debugCheckHasDirectionality(context));
+    final TextDirection textDirection = Directionality.of(context);
+
     final IconThemeData iconTheme = IconTheme.of(context);
 
     final double iconSize = size ?? iconTheme.size;
 
-    if (icon == null)
-      return new SizedBox(width: iconSize, height: iconSize);
+    if (icon == null) {
+      return new Semantics(
+        label: semanticLabel,
+        child: new SizedBox(width: iconSize, height: iconSize)
+      );
+    }
 
     final double iconOpacity = iconTheme.opacity;
     Color iconColor = color ?? iconTheme.color;
     if (iconOpacity != 1.0)
       iconColor = iconColor.withOpacity(iconColor.opacity * iconOpacity);
 
-    return new ExcludeSemantics(
-      child: new SizedBox(
-        width: iconSize,
-        height: iconSize,
-        child: new Center(
-          child: new RichText(
-            text: new TextSpan(
-              text: new String.fromCharCode(icon.codePoint),
-              style: new TextStyle(
-                inherit: false,
-                color: iconColor,
-                fontSize: iconSize,
-                fontFamily: icon.fontFamily
-              )
-            )
-          )
-        )
-      )
+    return new Semantics(
+      label: semanticLabel,
+      child: new ExcludeSemantics(
+        child: new SizedBox(
+          width: iconSize,
+          height: iconSize,
+          child: new Center(
+            child: new RichText(
+              textDirection: textDirection, // Since we already fetched it for the assert...
+              text: new TextSpan(
+                text: new String.fromCharCode(icon.codePoint),
+                style: new TextStyle(
+                  inherit: false,
+                  color: iconColor,
+                  fontSize: iconSize,
+                  fontFamily: icon.fontFamily,
+                  package: icon.fontPackage,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<IconData>('icon', icon, ifNull: '<empty>', showName: false));
     description.add(new DoubleProperty('size', size, defaultValue: null));

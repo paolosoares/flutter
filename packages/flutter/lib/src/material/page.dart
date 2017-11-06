@@ -9,9 +9,9 @@ import 'package:flutter/widgets.dart';
 import 'theme.dart';
 
 // Fractional offset from 1/4 screen below the top to fully on screen.
-final FractionalOffsetTween _kBottomUpTween = new FractionalOffsetTween(
-  begin: FractionalOffset.bottomLeft,
-  end: FractionalOffset.topLeft
+final Tween<Offset> _kBottomUpTween = new Tween<Offset>(
+  begin: const Offset(0.0, 0.25),
+  end: Offset.zero,
 );
 
 // Used for Android and Fuchsia.
@@ -26,7 +26,7 @@ class _MountainViewPageTransition extends StatelessWidget {
        )),
        super(key: key);
 
-  final Animation<FractionalOffset> _positionAnimation;
+  final Animation<Offset> _positionAnimation;
   final Widget child;
 
   @override
@@ -55,6 +55,10 @@ class _MountainViewPageTransition extends StatelessWidget {
 /// Specify whether the incoming page is a fullscreen modal dialog. On iOS, those
 /// pages animate bottom->up rather than right->left.
 ///
+/// The type `T` specifies the return type of the route which can be supplied as
+/// the route is popped from the stack via [Navigator.pop] when an optional
+/// `result` can be provided.
+///
 /// See also:
 ///
 ///  * [CupertinoPageRoute], that this [PageRoute] delegates transition animations to for iOS.
@@ -66,25 +70,35 @@ class MaterialPageRoute<T> extends PageRoute<T> {
     this.maintainState: true,
     bool fullscreenDialog: false,
   }) : assert(builder != null),
-       assert(opaque),
-       super(settings: settings, fullscreenDialog: fullscreenDialog);
+       super(settings: settings, fullscreenDialog: fullscreenDialog) {
+    assert(opaque);
+  }
 
   /// Builds the primary contents of the route.
   final WidgetBuilder builder;
 
+  @override
+  final bool maintainState;
+
   /// A delegate PageRoute to which iOS themed page operations are delegated to.
   /// It's lazily created on first use.
-  CupertinoPageRoute<T> _internalCupertinoPageRoute;
   CupertinoPageRoute<T> get _cupertinoPageRoute {
+    assert(_useCupertinoTransitions);
     _internalCupertinoPageRoute ??= new CupertinoPageRoute<T>(
       builder: builder, // Not used.
       fullscreenDialog: fullscreenDialog,
+      hostRoute: this,
     );
     return _internalCupertinoPageRoute;
   }
+  CupertinoPageRoute<T> _internalCupertinoPageRoute;
 
-  @override
-  final bool maintainState;
+  /// Whether we should currently be using Cupertino transitions. This is true
+  /// if the theme says we're on iOS, or if we're in an active gesture.
+  bool get _useCupertinoTransitions {
+    return _internalCupertinoPageRoute?.popGestureInProgress == true
+        || Theme.of(navigator.context).platform == TargetPlatform.iOS;
+  }
 
   @override
   Duration get transitionDuration => const Duration(milliseconds: 300);
@@ -93,8 +107,8 @@ class MaterialPageRoute<T> extends PageRoute<T> {
   Color get barrierColor => null;
 
   @override
-  bool canTransitionFrom(TransitionRoute<dynamic> nextRoute) {
-    return nextRoute is MaterialPageRoute<dynamic> || nextRoute is CupertinoPageRoute<dynamic>;
+  bool canTransitionFrom(TransitionRoute<dynamic> previousRoute) {
+    return (previousRoute is MaterialPageRoute || previousRoute is CupertinoPageRoute);
   }
 
   @override
@@ -110,23 +124,6 @@ class MaterialPageRoute<T> extends PageRoute<T> {
     super.dispose();
   }
 
-  /// Support for dismissing this route with a horizontal swipe is enabled
-  /// for [TargetPlatform.iOS]. If attempts to dismiss this route might be
-  /// vetoed because a [WillPopCallback] was defined for the route then the
-  /// platform-specific back gesture is disabled.
-  ///
-  /// See also:
-  ///
-  ///  * [CupertinoPageRoute] that backs the gesture for iOS.
-  ///  * [hasScopedWillPopCallback], which is true if a `willPop` callback
-  ///    is defined for this route.
-  @override
-  NavigationGestureController startPopGesture() {
-    return Theme.of(navigator.context).platform == TargetPlatform.iOS
-        ? _cupertinoPageRoute.startPopGestureForRoute(this)
-        : null;
-  }
-
   @override
   Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
     final Widget result = builder(context);
@@ -138,18 +135,18 @@ class MaterialPageRoute<T> extends PageRoute<T> {
         );
       }
       return true;
-    });
+    }());
     return result;
   }
 
   @override
   Widget buildTransitions(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
-    if (Theme.of(context).platform == TargetPlatform.iOS) {
+    if (_useCupertinoTransitions) {
       return _cupertinoPageRoute.buildTransitions(context, animation, secondaryAnimation, child);
     } else {
       return new _MountainViewPageTransition(
         routeAnimation: animation,
-        child: child
+        child: child,
       );
     }
   }

@@ -13,9 +13,6 @@ import 'package:flutter_devicelab/framework/adb.dart';
 import 'package:flutter_devicelab/framework/framework.dart';
 import 'package:flutter_devicelab/framework/utils.dart';
 
-// "An Observatory debugger and profiler on iPhone SE is available at: http://127.0.0.1:8100/"
-final RegExp observatoryRegExp = new RegExp(r'An Observatory debugger .* is available at: (\S+:(\d+))');
-
 void main() {
   task(() async {
     int vmServicePort;
@@ -38,10 +35,9 @@ void main() {
         .listen((String line) {
           print('run:stdout: $line');
           stdout.add(line);
-          if (line.contains(observatoryRegExp)) {
-            final Match match = observatoryRegExp.firstMatch(line);
-            vmServicePort = int.parse(match.group(2));
-            print('service protocol connection available at ${match.group(1)}');
+          if (lineContainsServicePort(line)) {
+            vmServicePort = parseServicePort(line);
+            print('service protocol connection available at port $vmServicePort');
             print('run: ready!');
             ready.complete();
             ok ??= true;
@@ -77,22 +73,28 @@ void main() {
       await driver.drive('none');
       final Future<String> reloadStartingText =
         stdout.stream.firstWhere((String line) => line.endsWith('hot reload...'));
+      final Future<String> reloadEndingText =
+        stdout.stream.firstWhere((String line) => line.contains('Hot reload performed in '));
       print('test: pressing "r" to perform a hot reload...');
       run.stdin.write('r');
       await reloadStartingText;
+      await reloadEndingText;
       await driver.drive('none');
       final Future<String> restartStartingText =
         stdout.stream.firstWhere((String line) => line.endsWith('full restart...'));
+      final Future<String> restartEndingText =
+        stdout.stream.firstWhere((String line) => line.contains('Restart performed in '));
       print('test: pressing "R" to perform a full reload...');
       run.stdin.write('R');
       await restartStartingText;
+      await restartEndingText;
       await driver.drive('none');
       run.stdin.write('q');
       final int result = await run.exitCode;
       if (result != 0)
         throw 'Received unexpected exit code $result from run process.';
       print('test: validating that the app has in fact closed...');
-      await client.done.timeout(new Duration(seconds: 5));
+      await client.done.timeout(const Duration(seconds: 5));
     });
     return new TaskResult.success(null);
   });

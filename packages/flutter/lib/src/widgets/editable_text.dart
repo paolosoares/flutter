@@ -27,6 +27,10 @@ typedef void SelectionChangedCallback(TextSelection selection, bool longPress);
 
 const Duration _kCursorBlinkHalfPeriod = const Duration(milliseconds: 500);
 
+// Number of cursor ticks during which the most recently entered character
+// is shown in an obscured text field.
+const int _kObscureShowLatestCharCursorTicks = 3;
+
 /// A controller for an editable text field.
 ///
 /// Whenever the user modifies a text field with an associated
@@ -137,11 +141,15 @@ class EditableText extends StatefulWidget {
   /// Creates a basic text input control.
   ///
   /// The [maxLines] property can be set to null to remove the restriction on
-  /// the number of lines. By default, it is 1, meaning this is a single-line
-  /// text field. If it is not null, it must be greater than zero.
+  /// the number of lines. By default, it is one, meaning this is a single-line
+  /// text field. [maxLines] must be null or greater than zero.
   ///
-  /// The [controller], [focusNode], [style], and [cursorColor] arguments must
-  /// not be null.
+  /// If [keyboardType] is not set or is null, it will default to
+  /// [TextInputType.text] unless [maxLines] is greater than one, when it will
+  /// default to [TextInputType.multiline].
+  ///
+  /// The [controller], [focusNode], [style], [cursorColor], and [textAlign]
+  /// arguments must not be null.
   EditableText({
     Key key,
     @required this.controller,
@@ -150,13 +158,14 @@ class EditableText extends StatefulWidget {
     this.autocorrect: true,
     @required this.style,
     @required this.cursorColor,
-    this.textAlign,
+    this.textAlign: TextAlign.start,
+    this.textDirection,
     this.textScaleFactor,
     this.maxLines: 1,
     this.autofocus: false,
     this.selectionColor,
     this.selectionControls,
-    this.keyboardType,
+    TextInputType keyboardType,
     this.onChanged,
     this.onSubmitted,
     this.onSelectionChanged,
@@ -167,8 +176,10 @@ class EditableText extends StatefulWidget {
        assert(autocorrect != null),
        assert(style != null),
        assert(cursorColor != null),
+       assert(textAlign != null),
        assert(maxLines == null || maxLines > 0),
        assert(autofocus != null),
+       keyboardType = keyboardType ?? (maxLines == 1 ? TextInputType.text : TextInputType.multiline),
        inputFormatters = maxLines == 1
            ? (
                <TextInputFormatter>[BlacklistingTextInputFormatter.singleLineFormatter]
@@ -197,7 +208,24 @@ class EditableText extends StatefulWidget {
   final TextStyle style;
 
   /// How the text should be aligned horizontally.
+  ///
+  /// Defaults to [TextAlign.start].
   final TextAlign textAlign;
+
+  /// The directionality of the text.
+  ///
+  /// This decides how [textAlign] values like [TextAlign.start] and
+  /// [TextAlign.end] are interpreted.
+  ///
+  /// This is also used to disambiguate how to render bidirectional text. For
+  /// example, if the text is an English phrase followed by a Hebrew phrase,
+  /// in a [TextDirection.ltr] context the English phrase will be on the left
+  /// and the Hebrew phrase to its right, while in a [TextDirection.rtl]
+  /// context, the English phrase will be on the right and the Hebrow phrase on
+  /// its left.
+  ///
+  /// Defaults to the ambient [Directionality], if any.
+  final TextDirection textDirection;
 
   /// The number of font pixels for each logical pixel.
   ///
@@ -254,7 +282,7 @@ class EditableText extends StatefulWidget {
   EditableTextState createState() => new EditableTextState();
 
   @override
-  void debugFillProperties(List<DiagnosticsNode> description) {
+  void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(new DiagnosticsProperty<TextEditingController>('controller', controller));
     description.add(new DiagnosticsProperty<FocusNode>('focusNode', focusNode));
@@ -262,6 +290,7 @@ class EditableText extends StatefulWidget {
     description.add(new DiagnosticsProperty<bool>('autocorrect', autocorrect, defaultValue: true));
     style?.debugFillProperties(description);
     description.add(new EnumProperty<TextAlign>('textAlign', textAlign, defaultValue: null));
+    description.add(new EnumProperty<TextDirection>('textDirection', textDirection, defaultValue: null));
     description.add(new DoubleProperty('textScaleFactor', textScaleFactor, defaultValue: null));
     description.add(new IntProperty('maxLines', maxLines, defaultValue: 1));
     description.add(new DiagnosticsProperty<bool>('autofocus', autofocus, defaultValue: false));
@@ -337,20 +366,30 @@ class EditableTextState extends State<EditableText> with AutomaticKeepAliveClien
 
   @override
   void updateEditingValue(TextEditingValue value) {
-    if (value.text != _value.text)
+    if (value.text != _value.text) {
       _hideSelectionOverlayIfNeeded();
+      if (widget.obscureText && value.text.length == _value.text.length + 1) {
+        _obscureShowCharTicksPending = _kObscureShowLatestCharCursorTicks;
+        _obscureLatestCharIndex = _value.selection.baseOffset;
+      }
+    }
     _lastKnownRemoteTextEditingValue = value;
     _formatAndSetValue(value);
-    if (widget.onChanged != null)
-      widget.onChanged(value.text);
   }
 
   @override
   void performAction(TextInputAction action) {
-    widget.controller.clearComposing();
-    widget.focusNode.unfocus();
-    if (widget.onSubmitted != null)
-      widget.onSubmitted(_value.text);
+    switch (action) {
+      case TextInputAction.done:
+        widget.controller.clearComposing();
+        widget.focusNode.unfocus();
+        if (widget.onSubmitted != null)
+          widget.onSubmitted(_value.text);
+        break;
+      case TextInputAction.newline:
+        // Do nothing for a "newline" action: the newline is already inserted.
+        break;
+    }
   }
 
   void _updateRemoteEditingValueIfNeeded() {
@@ -390,8 +429,16 @@ class EditableTextState extends State<EditableText> with AutomaticKeepAliveClien
     if (!_hasInputConnection) {
       final TextEditingValue localValue = _value;
       _lastKnownRemoteTextEditingValue = localValue;
-      _textInputConnection = TextInput.attach(this, new TextInputConfiguration(inputType: widget.keyboardType, obscureText: widget.obscureText, autocorrect: widget.autocorrect))
-        ..setEditingState(localValue);
+      _textInputConnection = TextInput.attach(this,
+          new TextInputConfiguration(
+              inputType: widget.keyboardType,
+              obscureText: widget.obscureText,
+              autocorrect: widget.autocorrect,
+              inputAction: widget.keyboardType == TextInputType.multiline
+                  ? TextInputAction.newline
+                  : TextInputAction.done
+          )
+      )..setEditingState(localValue);
     }
     _textInputConnection.show();
   }
@@ -495,6 +542,7 @@ class EditableTextState extends State<EditableText> with AutomaticKeepAliveClien
   }
 
   void _formatAndSetValue(TextEditingValue value) {
+    final bool textChanged = _value?.text != value?.text;
     if (widget.inputFormatters != null && widget.inputFormatters.isNotEmpty) {
       for (TextInputFormatter formatter in widget.inputFormatters)
         value = formatter.formatEditUpdate(_value, value);
@@ -503,6 +551,8 @@ class EditableTextState extends State<EditableText> with AutomaticKeepAliveClien
     } else {
       _value = value;
     }
+    if (textChanged && widget.onChanged != null)
+      widget.onChanged(value.text);
   }
 
   /// Whether the blinking cursor is actually visible at this precise moment
@@ -516,8 +566,14 @@ class EditableTextState extends State<EditableText> with AutomaticKeepAliveClien
   @visibleForTesting
   Duration get cursorBlinkInterval => _kCursorBlinkHalfPeriod;
 
+  int _obscureShowCharTicksPending = 0;
+  int _obscureLatestCharIndex;
+
   void _cursorTick(Timer timer) {
     _showCursor.value = !_showCursor.value;
+    if (_obscureShowCharTicksPending > 0) {
+      setState(() { _obscureShowCharTicksPending--; });
+    }
   }
 
   void _startCursorTimer() {
@@ -529,6 +585,7 @@ class EditableTextState extends State<EditableText> with AutomaticKeepAliveClien
     _cursorTimer?.cancel();
     _cursorTimer = null;
     _showCursor.value = false;
+    _obscureShowCharTicksPending = 0;
   }
 
   void _startOrStopCursorTimerIfNeeded() {
@@ -559,6 +616,12 @@ class EditableTextState extends State<EditableText> with AutomaticKeepAliveClien
     updateKeepAlive();
   }
 
+  TextDirection get _textDirection {
+    final TextDirection result = widget.textDirection ?? Directionality.of(context);
+    assert(result != null, '$runtimeType created without a textDirection and with no ambient Directionality.');
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     FocusScope.of(context).reparentIfNeeded(widget.focusNode);
@@ -575,11 +638,14 @@ class EditableTextState extends State<EditableText> with AutomaticKeepAliveClien
             style: widget.style,
             cursorColor: widget.cursorColor,
             showCursor: _showCursor,
+            hasFocus: _hasFocus,
             maxLines: widget.maxLines,
             selectionColor: widget.selectionColor,
             textScaleFactor: widget.textScaleFactor ?? MediaQuery.of(context, nullOk: true)?.textScaleFactor ?? 1.0,
             textAlign: widget.textAlign,
+            textDirection: _textDirection,
             obscureText: widget.obscureText,
+            obscureShowCharacterAtIndex: _obscureShowCharTicksPending > 0 ? _obscureLatestCharIndex : null,
             autocorrect: widget.autocorrect,
             offset: offset,
             onSelectionChanged: _handleSelectionChanged,
@@ -598,26 +664,33 @@ class _Editable extends LeafRenderObjectWidget {
     this.style,
     this.cursorColor,
     this.showCursor,
+    this.hasFocus,
     this.maxLines,
     this.selectionColor,
     this.textScaleFactor,
     this.textAlign,
+    @required this.textDirection,
     this.obscureText,
+    this.obscureShowCharacterAtIndex,
     this.autocorrect,
     this.offset,
     this.onSelectionChanged,
     this.onCaretChanged,
-  }) : super(key: key);
+  }) : assert(textDirection != null),
+       super(key: key);
 
   final TextEditingValue value;
   final TextStyle style;
   final Color cursorColor;
   final ValueNotifier<bool> showCursor;
+  final bool hasFocus;
   final int maxLines;
   final Color selectionColor;
   final double textScaleFactor;
   final TextAlign textAlign;
+  final TextDirection textDirection;
   final bool obscureText;
+  final int obscureShowCharacterAtIndex;
   final bool autocorrect;
   final ViewportOffset offset;
   final SelectionChangedHandler onSelectionChanged;
@@ -629,10 +702,12 @@ class _Editable extends LeafRenderObjectWidget {
       text: _styledTextSpan,
       cursorColor: cursorColor,
       showCursor: showCursor,
+      hasFocus: hasFocus,
       maxLines: maxLines,
       selectionColor: selectionColor,
       textScaleFactor: textScaleFactor,
       textAlign: textAlign,
+      textDirection: textDirection,
       selection: value.selection,
       offset: offset,
       onSelectionChanged: onSelectionChanged,
@@ -646,10 +721,12 @@ class _Editable extends LeafRenderObjectWidget {
       ..text = _styledTextSpan
       ..cursorColor = cursorColor
       ..showCursor = showCursor
+      ..hasFocus = hasFocus
       ..maxLines = maxLines
       ..selectionColor = selectionColor
       ..textScaleFactor = textScaleFactor
       ..textAlign = textAlign
+      ..textDirection = textDirection
       ..selection = value.selection
       ..offset = offset
       ..onSelectionChanged = onSelectionChanged
@@ -675,8 +752,12 @@ class _Editable extends LeafRenderObjectWidget {
     }
 
     String text = value.text;
-    if (obscureText)
+    if (obscureText) {
       text = new String.fromCharCodes(new List<int>.filled(text.length, 0x2022));
+      final int o = obscureShowCharacterAtIndex;
+      if (o != null && o >= 0 && o < text.length)
+        text = text.replaceRange(o, o + 1, value.text.substring(o, o + 1));
+    }
     return new TextSpan(style: style, text: text);
   }
 }

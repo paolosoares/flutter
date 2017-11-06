@@ -15,6 +15,7 @@ import '../base/logger.dart';
 import '../base/port_scanner.dart';
 import '../base/process.dart';
 import '../base/process_manager.dart';
+import '../base/utils.dart';
 import '../build_info.dart';
 import '../commands/build_apk.dart';
 import '../device.dart';
@@ -338,13 +339,11 @@ class AndroidDevice extends Device {
 
   @override
   Future<LaunchResult> startApp(
-    ApplicationPackage package,
-    BuildMode mode, {
+    ApplicationPackage package, {
     String mainPath,
     String route,
     DebuggingOptions debuggingOptions,
     Map<String, dynamic> platformArgs,
-    String kernelPath,
     bool prebuiltApplication: false,
     bool applicationNeedsRebuild: false,
     bool usesTerminalUi: true,
@@ -352,7 +351,7 @@ class AndroidDevice extends Device {
     if (!await _checkForSupportedAdbVersion() || !await _checkForSupportedAndroidVersion())
       return new LaunchResult.failed();
 
-    if (await targetPlatform != TargetPlatform.android_arm && mode != BuildMode.debug) {
+    if (await targetPlatform != TargetPlatform.android_arm && !debuggingOptions.buildInfo.isDebug) {
       printError('Profile and release builds are only supported on ARM targets.');
       return new LaunchResult.failed();
     }
@@ -361,8 +360,7 @@ class AndroidDevice extends Device {
       printTrace('Building APK');
       await buildApk(
           target: mainPath,
-          buildMode: debuggingOptions.buildMode,
-          kernelPath: kernelPath,
+          buildInfo: debuggingOptions.buildInfo,
       );
       // Package has been built, so we can get the updated application ID and
       // activity name from the .apk.
@@ -380,15 +378,12 @@ class AndroidDevice extends Device {
     printTrace('$this startApp');
 
     ProtocolDiscovery observatoryDiscovery;
-    ProtocolDiscovery diagnosticDiscovery;
 
     if (debuggingOptions.debuggingEnabled) {
       // TODO(devoncarew): Remember the forwarding information (so we can later remove the
       // port forwarding or set it up again when adb fails on us).
       observatoryDiscovery = new ProtocolDiscovery.observatory(
         getLogReader(), portForwarder: portForwarder, hostPort: debuggingOptions.observatoryPort);
-      diagnosticDiscovery = new ProtocolDiscovery.diagnosticService(
-        getLogReader(), portForwarder: portForwarder, hostPort: debuggingOptions.diagnosticPort);
     }
 
     List<String> cmd;
@@ -407,8 +402,10 @@ class AndroidDevice extends Device {
       cmd.addAll(<String>['--es', 'route', route]);
     if (debuggingOptions.enableSoftwareRendering)
       cmd.addAll(<String>['--ez', 'enable-software-rendering', 'true']);
+    if (debuggingOptions.traceSkia)
+      cmd.addAll(<String>['--ez', 'trace-skia', 'true']);
     if (debuggingOptions.debuggingEnabled) {
-      if (debuggingOptions.buildMode == BuildMode.debug)
+      if (debuggingOptions.buildInfo.isDebug)
         cmd.addAll(<String>['--ez', 'enable-checked-mode', 'true']);
       if (debuggingOptions.startPaused)
         cmd.addAll(<String>['--ez', 'start-paused', 'true']);
@@ -430,31 +427,20 @@ class AndroidDevice extends Device {
     // device has printed "Observatory is listening on...".
     printTrace('Waiting for observatory port to be available...');
 
-    // TODO(danrubel) Waiting for observatory and diagnostic services
-    // can be made common across all devices.
+    // TODO(danrubel) Waiting for observatory services can be made common across all devices.
     try {
-      Uri observatoryUri, diagnosticUri;
+      Uri observatoryUri;
 
-      if (debuggingOptions.buildMode == BuildMode.debug) {
-        final List<Uri> deviceUris = await Future.wait(
-            <Future<Uri>>[observatoryDiscovery.uri, diagnosticDiscovery.uri]
-        );
-        observatoryUri = deviceUris[0];
-        diagnosticUri = deviceUris[1];
-      } else if (debuggingOptions.buildMode == BuildMode.profile) {
+      if (debuggingOptions.buildInfo.isDebug || debuggingOptions.buildInfo.isProfile) {
         observatoryUri = await observatoryDiscovery.uri;
       }
 
-      return new LaunchResult.succeeded(
-          observatoryUri: observatoryUri,
-          diagnosticUri: diagnosticUri,
-      );
+      return new LaunchResult.succeeded(observatoryUri: observatoryUri);
     } catch (error) {
       printError('Error waiting for a debug connection: $error');
       return new LaunchResult.failed();
     } finally {
-      observatoryDiscovery.cancel();
-      diagnosticDiscovery.cancel();
+      await observatoryDiscovery.cancel();
     }
   }
 
@@ -517,7 +503,7 @@ class AndroidDevice extends Device {
       final Match match = discoverExp.firstMatch(line);
       if (match != null) {
         final Map<String, dynamic> app = JSON.decode(match.group(1));
-        result.add(new DiscoveredApp(app['id'], app['observatoryPort'], app['diagnosticPort']));
+        result.add(new DiscoveredApp(app['id'], app['observatoryPort']));
       }
     });
 
@@ -525,8 +511,10 @@ class AndroidDevice extends Device {
       'shell', 'am', 'broadcast', '-a', 'io.flutter.view.DISCOVER'
     ]));
 
-    await new Future<Null>.delayed(const Duration(seconds: 1));
-    logs.cancel();
+    await waitGroup<Null>(<Future<Null>>[
+      new Future<Null>.delayed(const Duration(seconds: 1)),
+      logs.cancel(),
+    ]);
     return result;
   }
 }
@@ -768,7 +756,7 @@ class _AndroidDevicePortForwarder extends DevicePortForwarder {
     final List<String> lines = LineSplitter.split(stdout).toList();
     for (String line in lines) {
       if (line.startsWith(device.id)) {
-        final List<String> splitLine = line.split("tcp:");
+        final List<String> splitLine = line.split('tcp:');
 
         // Sanity check splitLine.
         if (splitLine.length != 3)

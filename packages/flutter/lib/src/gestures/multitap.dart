@@ -199,9 +199,7 @@ class DoubleTapGestureRecognizer extends GestureRecognizer {
   }
 
   void _clearTrackers() {
-    final List<_TapTracker> localTrackers = new List<_TapTracker>.from(_trackers.values);
-    for (_TapTracker tracker in localTrackers)
-      _reject(tracker);
+    _trackers.values.toList().forEach(_reject);
     assert(_trackers.isEmpty);
   }
 
@@ -221,7 +219,7 @@ class DoubleTapGestureRecognizer extends GestureRecognizer {
   }
 
   @override
-  String toStringShort() => 'double tap';
+  String get debugDescription => 'double tap';
 }
 
 /// TapGesture represents a full gesture resulting from a single tap sequence,
@@ -404,5 +402,5 @@ class MultiTapGestureRecognizer extends GestureRecognizer {
   }
 
   @override
-  String toStringShort() => 'multitap';
+  String get debugDescription => 'multitap';
 }

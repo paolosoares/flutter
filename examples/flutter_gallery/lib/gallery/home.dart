@@ -9,12 +9,15 @@ import 'drawer.dart';
 import 'item.dart';
 
 const double _kFlexibleSpaceMaxHeight = 256.0;
+const String _kGalleryAssetsPackage = 'flutter_gallery_assets';
 
 class _BackgroundLayer {
   _BackgroundLayer({ int level, double parallax })
-    : assetName = 'packages/flutter_gallery_assets/appbar/appbar_background_layer$level.png',
+    : assetName = 'appbar/appbar_background_layer$level.png',
+      assetPackage = _kGalleryAssetsPackage,
       parallaxTween = new Tween<double>(begin: 0.0, end: parallax);
   final String assetName;
+  final String assetPackage;
   final Tween<double> parallaxTween;
 }
 
@@ -46,6 +49,7 @@ class _AppBarBackground extends StatelessWidget {
               bottom: 0.0,
               child: new Image.asset(
                 layer.assetName,
+                package: layer.assetPackage,
                 fit: BoxFit.cover,
                 height: _kFlexibleSpaceMaxHeight
               )
@@ -64,6 +68,8 @@ class GalleryHome extends StatefulWidget {
     @required this.onThemeChanged,
     this.timeDilation,
     @required this.onTimeDilationChanged,
+    this.textScaleFactor,
+    this.onTextScaleFactorChanged,
     this.showPerformanceOverlay,
     this.onShowPerformanceOverlayChanged,
     this.checkerboardRasterCacheImages,
@@ -81,6 +87,9 @@ class GalleryHome extends StatefulWidget {
 
   final double timeDilation;
   final ValueChanged<double> onTimeDilationChanged;
+
+  final double textScaleFactor;
+  final ValueChanged<double> onTextScaleFactorChanged;
 
   final bool showPerformanceOverlay;
   final ValueChanged<bool> onShowPerformanceOverlayChanged;
@@ -134,7 +143,7 @@ class GalleryHomeState extends State<GalleryHome> with SingleTickerProviderState
             child: new Container(
               height: 48.0,
               padding: const EdgeInsets.only(left: 16.0),
-              alignment: FractionalOffset.centerLeft,
+              alignment: Alignment.centerLeft,
               child: new Text(galleryItem.category, style: headerStyle)
             ),
           )
@@ -155,6 +164,8 @@ class GalleryHomeState extends State<GalleryHome> with SingleTickerProviderState
         onThemeChanged: widget.onThemeChanged,
         timeDilation: widget.timeDilation,
         onTimeDilationChanged: widget.onTimeDilationChanged,
+        textScaleFactor: widget.textScaleFactor,
+        onTextScaleFactorChanged: widget.onTextScaleFactorChanged,
         showPerformanceOverlay: widget.showPerformanceOverlay,
         onShowPerformanceOverlayChanged: widget.onShowPerformanceOverlayChanged,
         checkerboardRasterCacheImages: widget.checkerboardRasterCacheImages,
@@ -186,7 +197,7 @@ class GalleryHomeState extends State<GalleryHome> with SingleTickerProviderState
     assert(() {
       showPreviewBanner = false;
       return true;
-    });
+    }());
 
     if (showPreviewBanner) {
       home = new Stack(
@@ -197,7 +208,7 @@ class GalleryHomeState extends State<GalleryHome> with SingleTickerProviderState
             opacity: new CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
             child: const Banner(
               message: 'PREVIEW',
-              location: BannerLocation.topRight,
+              location: BannerLocation.topEnd,
             )
           ),
         ]

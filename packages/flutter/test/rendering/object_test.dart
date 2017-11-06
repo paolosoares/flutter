@@ -7,7 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test("ensure frame is scheduled for markNeedsSemanticsUpdate", () {
+  test('ensure frame is scheduled for markNeedsSemanticsUpdate', () {
     final TestRenderObject renderObject = new TestRenderObject();
     int onNeedVisualUpdateCallCount = 0;
     final PipelineOwner owner = new PipelineOwner(onNeedVisualUpdate: () {
@@ -22,7 +22,7 @@ void main() {
     expect(onNeedVisualUpdateCallCount, 2);
   });
 
-  test("ensure frame is scheduled for markNeedsSemanticsUpdate with onlyChanges: true", () {
+  test('ensure frame is scheduled for markNeedsSemanticsUpdate with onlyChanges: true', () {
     final TestRenderObject renderObject = new TestRenderObject();
     int onNeedVisualUpdateCallCount = 0;
     final PipelineOwner owner = new PipelineOwner(onNeedVisualUpdate: () {
@@ -33,7 +33,7 @@ void main() {
     owner.flushSemantics();
 
     expect(onNeedVisualUpdateCallCount, 1);
-    renderObject.markNeedsSemanticsUpdate(onlyChanges: true);
+    renderObject.markNeedsSemanticsUpdate(onlyLocalUpdates: true);
     expect(onNeedVisualUpdateCallCount, 2);
   });
 }
@@ -55,6 +55,9 @@ class TestRenderObject extends RenderObject {
   Rect get semanticBounds => new Rect.fromLTWH(0.0, 0.0, 10.0, 20.0);
 
   @override
-  bool get isSemanticBoundary => true;
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
+    config.isSemanticBoundary = true;
+  }
 }
 

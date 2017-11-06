@@ -31,20 +31,18 @@ class GalleryItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return new MergeSemantics(
-      child: new ListTile(
-        title: new Text(title),
-        subtitle: new Text(subtitle),
-        onTap: () {
-          if (routeName != null) {
-            Timeline.instantSync('Start Transition', arguments: <String, String>{
-              'from': '/',
-              'to': routeName
-            });
-            Navigator.pushNamed(context, routeName);
-          }
+    return new ListTile(
+      title: new Text(title),
+      subtitle: new Text(subtitle),
+      onTap: () {
+        if (routeName != null) {
+          Timeline.instantSync('Start Transition', arguments: <String, String>{
+            'from': '/',
+            'to': routeName
+          });
+          Navigator.pushNamed(context, routeName);
         }
-      ),
+      }
     );
   }
 }
@@ -288,6 +286,13 @@ List<GalleryItem> _buildGalleryItems() {
       buildRoute: (BuildContext context) => new CupertinoDialogDemo(),
     ),
     new GalleryItem(
+      title: 'Navigation',
+      subtitle: 'Cupertino styled navigation patterns',
+      category: 'Cupertino Components',
+      routeName: CupertinoNavigationDemo.routeName,
+      buildRoute: (BuildContext context) => new CupertinoNavigationDemo(),
+    ),
+    new GalleryItem(
       title: 'Sliders',
       subtitle: 'Cupertino styled sliders',
       category: 'Cupertino Components',
@@ -331,7 +336,7 @@ List<GalleryItem> _buildGalleryItems() {
       ),
     );
     return true;
-  });
+  }());
 
   return galleryItems;
 }
